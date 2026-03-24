@@ -1,1 +1,237 @@
-#user interface
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tabify</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ─── Header ─── -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="logo-mark">
+        <span class="logo-dot"></span>
+        <span class="logo-dot"></span>
+        <span class="logo-dot"></span>
+        <span class="logo-dot"></span>
+      </div>
+      <span class="brand-name">Tabify</span>
+    </div>
+    <div class="header-meta">
+      <span class="tab-count" id="totalCount">— tabs</span>
+      <button class="icon-btn" id="settingsBtn" title="Settings">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ─── Status Bar ─── -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot idle"></div>
+    <span class="status-text" id="statusText">Ready to analyse your tabs</span>
+  </div>
+
+  <!-- ─── Primary Action ─── -->
+  <div class="action-zone">
+    <button class="btn-primary" id="autoGroupBtn">
+      <svg class="btn-icon" width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M2 4h5M2 8h7M2 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M12 6.5v3M10.5 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span class="btn-label">Auto Group</span>
+      <span class="btn-shortcut">⌘G</span>
+    </button>
+
+    <div class="secondary-actions">
+      <button class="btn-ghost" id="cleanupBtn">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Clean up
+      </button>
+      
+    </div>
+  </div>
+
+  <!-- ─── Tab Groups List ─── -->
+  <section class="groups-section">
+    <div class="section-header">
+      <span class="section-label">Active groups</span>
+      <span class="pill" id="groupCount">0</span>
+    </div>
+
+    <div class="groups-list" id="groupsList">
+
+      <!-- Empty state -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-grid">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span>
+        </div>
+        <p class="empty-title">No groups yet</p>
+        <p class="empty-sub">Hit Auto Group to let AI organise your tabs</p>
+      </div>
+
+      <!-- ── Sample Group Card (Work) ── -->
+      <div class="group-card" data-color="blue" style="display:none" id="sampleGroup1">
+        <div class="group-card-header">
+          <div class="group-identity">
+            <span class="group-color-dot" data-color="blue"></span>
+            <span class="group-name">Work</span>
+            <span class="group-tab-count">4 tabs</span>
+          </div>
+          <div class="group-actions">
+            <button class="mini-btn" title="Restore group">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6a4 4 0 1 0 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M2 3v3h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="mini-btn danger" title="Close group">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="tab-list">
+          <div class="tab-item">
+            <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=github.com&sz=16" alt="" />
+            <span class="tab-title">github.com/your-repo</span>
+          </div>
+          <div class="tab-item">
+            <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=notion.so&sz=16" alt="" />
+            <span class="tab-title">Project Notes — Notion</span>
+          </div>
+          <div class="tab-item">
+            <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=linear.app&sz=16" alt="" />
+            <span class="tab-title">Sprint Board — Linear</span>
+          </div>
+          <div class="tab-item muted">
+            <span class="tab-more">+1 more</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── Saved Sessions ─── -->
+  <section class="sessions-section">
+    <div class="section-header">
+      <span class="section-label">Saved sessions</span>
+      <button class="text-btn" id="viewAllBtn">View all</button>
+    </div>
+
+    <div class="sessions-list" id="sessionsList">
+
+      <div class="session-row">
+        <div class="session-info">
+          <span class="session-name">Deep Work: API Refactor</span>
+          <span class="session-meta">8 tabs · 2h ago</span>
+        </div>
+        <button class="restore-btn">Restore</button>
+      </div>
+
+      <div class="session-row">
+        <div class="session-info">
+          <span class="session-name">Research: ML Papers</span>
+          <span class="session-meta">12 tabs · yesterday</span>
+        </div>
+        <button class="restore-btn">Restore</button>
+      </div>
+
+      <div class="no-sessions" id="noSessions" style="display:none;">
+        <span>No saved sessions yet</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── Cleanup Suggestions Panel (hidden by default) ─── -->
+  <div class="panel-overlay" id="cleanupPanel" style="display:none;">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Suggested cleanup</span>
+        <button class="icon-btn" id="closeCleanupPanel">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <p class="panel-sub">These tabs have been idle for a while</p>
+      <div class="cleanup-list" id="cleanupList">
+        <div class="cleanup-item">
+          <div class="cleanup-item-info">
+            <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=medium.com&sz=16" alt=""/>
+            <div>
+              <p class="cleanup-title">How to build a React app</p>
+              <p class="cleanup-age">Idle 3 hrs</p>
+            </div>
+          </div>
+          <div class="cleanup-item-actions">
+            <button class="chip-btn keep">Keep</button>
+            <button class="chip-btn close">Close</button>
+          </div>
+        </div>
+        <div class="cleanup-item">
+          <div class="cleanup-item-info">
+            <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=reddit.com&sz=16" alt=""/>
+            <div>
+              <p class="cleanup-title">r/programming — daily thread</p>
+              <p class="cleanup-age">Idle 5 hrs</p>
+            </div>
+          </div>
+          <div class="cleanup-item-actions">
+            <button class="chip-btn keep">Keep</button>
+            <button class="chip-btn close">Close</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn-ghost full" id="closeAllSuggested">Close all suggested</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Save Session Modal ─── -->
+  <div class="panel-overlay" id="savePanel" style="display:none;">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Save current session</span>
+        <button class="icon-btn" id="closeSavePanel">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <p class="panel-sub">Give this session a name to restore it later</p>
+      <input class="session-input" type="text" id="sessionNameInput" placeholder="e.g. Deep Work: Sprint 4" maxlength="40" />
+      <div class="panel-footer">
+        <button class="btn-primary full" id="confirmSave">Save session</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Footer ─── -->
+  <footer class="footer">
+    <span class="footer-tag">powered by AI classification</span>
+    <div class="footer-indicators">
+      <span class="indicator active" title="Context engine active"></span>
+      <span class="indicator" title="Grouping engine idle"></span>
+      <span class="indicator" title="Cleanup engine idle"></span>
+    </div>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
