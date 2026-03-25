@@ -1,3 +1,20 @@
-// permissions: tabs, storage, tabGroups
-//popup file
-//background file
+{
+  "manifest_version": 3,
+  "name": "Tabify",
+  "version": "1.0.0",
+  "description": "AI-powered tab organiser",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["model/model.json"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
