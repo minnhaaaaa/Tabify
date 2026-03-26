@@ -16,7 +16,23 @@ function extractDomain(url) {
     return "";
   }
 }
+function normalizeText(text) {
+  text = text.toLowerCase();
 
+  // 🔥 Key phrase mappings
+  const phraseMap = [
+    { pattern: /series a|series b|series c/g, replace: "funding_round" },
+    { pattern: /tv series|web series|netflix series/g, replace: "tv_series" },
+    { pattern: /stock market|share market/g, replace: "stock_market" },
+    { pattern: /online shopping|buy online/g, replace: "online_shopping" }
+  ];
+
+  phraseMap.forEach(({ pattern, replace }) => {
+    text = text.replace(pattern, replace);
+  });
+
+  return text;
+}
 function computeTFIDF(text) {
   const words = text.toLowerCase().split(/\W+/);
 
@@ -69,39 +85,6 @@ function predict(vector) {
   return scores.indexOf(Math.max(...scores));
 }
 
-const keywordRules = {
-  Coding: [
-    "github", "code", "programming", "developer", "api", "debug",
-    "javascript", "python", "html", "css", "react", "nodejs",
-    "tutorial", "documentation", "docs", "npm", "git", "deploy",
-    "frontend", "backend", "database", "framework", "library"
-  ],
-  Study: [
-    "lecture", "course", "learn", "notes", "exam", "syllabus",
-    "university", "college", "tutorial", "education", "chapter",
-    "assignment", "quiz", "study", "class", "lesson", "textbook",
-    "mcq", "revision", "practice", "formula", "subject"
-  ],
-  Shopping: [
-    "buy", "shop", "cart", "order", "price", "sale", "discount",
-    "delivery", "offer", "deal", "checkout", "product", "store"
-  ],
-  Entertainment: [
-    "watch", "stream", "movie", "music", "song", "episode",
-    "series", "video", "playlist", "podcast", "meme", "funny",
-    "trending", "viral", "celebrity", "trailer"
-  ],
-  Games: [
-    "game", "play", "gaming", "player", "multiplayer", "score",
-    "level", "quest", "tournament", "esports", "clan", "match"
-  ],
-  Financial: [
-    "bank", "invest", "stock", "finance", "loan", "insurance",
-    "mutual fund", "trading", "market", "portfolio", "tax",
-    "credit", "debit", "payment", "wallet", "upi", "emi"
-  ]
-};
-
 function keywordClassify(text) {
   const lower = text.toLowerCase();
   const scores = {};
@@ -152,7 +135,8 @@ function classifyTab(tab) {
     if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("edge://") || tab.url.startsWith("chrome-extension://")) {
         return "Other";}
   const domain = extractDomain(tab.url);
-  const text = (tab.title + " " + domain).toLowerCase();
+  const rawText = tab.title + " " + domain;
+const text = normalizeText(rawText);
 
   // 1. Exact domain whitelist
   if (domain in domainRules) {
@@ -161,16 +145,16 @@ function classifyTab(tab) {
   }
 
   // 2. TLD rules
-  if (domain.endsWith(".ac.in") || domain.endsWith(".edu") || domain.endsWith(".ac.uk")) return "Study";
-  if (domain.endsWith(".gov.in") || domain.endsWith(".gov")) return "Other";
+  if (domain.endsWith(".ac.in") || domain.endsWith(".edu") || domain.endsWith(".ac.uk") || domain.endsWith(".ac")) return "Study";
+  if (domain.endsWith(".gov.in") || domain.endsWith(".gov") || domain.endsWith(".nic.in")) return "Other";
+  if (domain.endsWith(".bank") || domain.includes(".bank.") || domain.includes("bank") || domain.includes("finance") || domain.includes("insurance")
+) return "Financial";
 
-  //3. Keyword Matching
-  const keywordResult = keywordClassify(text);
-  if (keywordResult) return keywordResult;
 
   // 3. ML classification
   const vector = computeTFIDF(text);
   const index = predict(vector);
+  if (index === -1) return "Other";
   const category = modelData.classes[index];
   const shoppingKeywords = ["buy", "shop", "cart", "order", "price", "sale",
                             "discount", "delivery", "offer", "deal", "checkout"];

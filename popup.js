@@ -186,6 +186,16 @@ function timeAgo(timestamp) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// --Save Model so background can access it--
+async function loadModel() {
+  modelData = await fetch(chrome.runtime.getURL('model/model.json'))
+    .then(res => res.json());
+
+  // ✅ Save to storage so background.js can use it
+  await chrome.storage.local.set({ modelData });
+  console.log("Model loaded");
+}
+
 // ─── Init ───
 document.addEventListener("DOMContentLoaded", async () => {
   await loadModel(); // ← from classifier.js
@@ -193,6 +203,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   updateCounts(tabs.length, 0);
   loadSessions();
+
+  // Inside DOMContentLoaded
+
+// Load saved toggle state
+const { dynamicGrouping } = await chrome.storage.sync.get("dynamicGrouping");
+const toggle = document.getElementById("dynamicToggle");
+toggle.checked = !!dynamicGrouping;
+
+// Save on change
+toggle.addEventListener("change", async () => {
+  await chrome.storage.sync.set({ dynamicGrouping: toggle.checked });
+  setStatus(
+    toggle.checked ? "analysing" : "idle",
+    toggle.checked ? "Dynamic grouping enabled" : "Dynamic grouping disabled"
+  );
+});
 
   document.getElementById("autoGroupBtn").addEventListener("click", groupTabs);
 
