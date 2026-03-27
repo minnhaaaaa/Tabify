@@ -1,17 +1,18 @@
 // Global variable to store model once loaded
 let modelData = null;
+let isModelReady = false;
 
 async function loadModel() {
   try {
     const res = await fetch(chrome.runtime.getURL('model/model.json'));
     modelData = await res.json();
+    isModelReady = true;
     console.log("Classifier: Model loaded successfully");
   } catch (err) {
     console.error("Classifier: Failed to load model", err);
   }
 }
 
-// Initial load call
 loadModel();
 
 function extractDomain(url) {
@@ -25,27 +26,27 @@ function extractDomain(url) {
 
 function normalizeText(text) {
   if (!text) return "";
-  text = text.toLowerCase();
+  // Lowercase and remove non-alphanumeric characters to match Python tokenizers
+  text = text.toLowerCase().replace(/[^\w\s]/g, ' ');
 
   const phraseMap = [
-    { pattern: /series a|series b|series c/g, replace: "funding_round" },
-    { pattern: /tv series|web series|netflix series/g, replace: "tv_series" },
-    { pattern: /stock market|share market/g, replace: "stock_market" },
-    { pattern: /online shopping|buy online/g, replace: "online_shopping" }
+    { pattern: /series [abc]/g, replace: "funding_round" },
+    { pattern: /(tv|web|netflix) series/g, replace: "tv_series" },
+    { pattern: /(stock|share) market/g, replace: "stock_market" },
+    { pattern: /online (shopping|buy)/g, replace: "online_shopping" }
   ];
 
   phraseMap.forEach(({ pattern, replace }) => {
     text = text.replace(pattern, replace);
   });
 
-  return text;
+  return text.trim();
 }
 
 function computeTFIDF(text) {
-  // SAFETY: If model isn't loaded yet, return an empty array
   if (!modelData || !modelData.vocabulary) return [];
 
-  const words = text.toLowerCase().split(/\W+/);
+  const words = text.split(/\s+/);
   const vocab = modelData.vocabulary;
   const idf = modelData.idf;
   const vector = new Array(Object.keys(vocab).length).fill(0);
@@ -62,16 +63,19 @@ function computeTFIDF(text) {
     vector[index] = tf[word] * idf[index];
   }
 
-  return vector;
+  // --- L2 Normalization (Crucial for Scikit-Learn models) ---
+  const squareSum = vector.reduce((sum, val) => sum + (val * val), 0);
+  const norm = Math.sqrt(squareSum);
+  return norm > 0 ? vector.map(v => v / norm) : vector;
 }
 
 function predict(vector) {
-  // SAFETY: Check if model data exists
   if (!modelData || !modelData.coef || vector.length === 0) return -1;
 
-  const weights = modelData.coef;
+  const weights = modelData.coef; 
   const bias = modelData.intercept;
 
+  // Calculate scores (Logits)
   const scores = weights.map((w, i) => {
     let sum = bias[i];
     for (let j = 0; j < vector.length; j++) {
@@ -80,82 +84,73 @@ function predict(vector) {
     return sum;
   });
 
+  // Softmax for Probability Distribution
   const maxScore = Math.max(...scores);
   const exps = scores.map(s => Math.exp(s - maxScore));
   const sumExps = exps.reduce((a, b) => a + b, 0);
   const probs = exps.map(e => e / sumExps);
 
   const maxProb = Math.max(...probs);
+  const maxIndex = probs.indexOf(maxProb);
 
-  if (maxProb < 0.5) {
-    return modelData.classes.indexOf("Other");
+  // If confidence is low, default to 'Other'
+  if (maxProb < 0.45) {
+    const otherIdx = modelData.classes.indexOf("Other");
+    return otherIdx !== -1 ? otherIdx : maxIndex;
   }
 
-  return scores.indexOf(Math.max(...scores));
+  return maxIndex;
 }
 
-// ─── Domain Whitelist ───
 const domainRules = {
-  "google.com": "Other",
-  "bing.com": "Other",
-  "duckduckgo.com": "Other",
-  "yahoo.com": "Other",
-  "google.co.in": "Other",
-  "friv.com": "Games",
-  "poki.com": "Games",
-  "chess.com": "Games",
-  "miniclip.com": "Games",
-  "youtube.com": null, 
-  "netflix.com": "Entertainment",
-  "twitch.tv": "Entertainment",
-  "github.com": "Coding",
-  "leetcode.com": "Coding",
-  "stackoverflow.com": "Coding",
-  "zerodha.com": "Financial",
-  "groww.in": "Financial",
+  "google.com": "Other", "bing.com": "Other", "duckduckgo.com": "Other",
+  "yahoo.com": "Other", "google.co.in": "Other", "friv.com": "Games",
+  "poki.com": "Games", "chess.com": "Games", "miniclip.com": "Games",
+  "youtube.com": null, "netflix.com": "Entertainment", "twitch.tv": "Entertainment",
+  "github.com": "Coding", "leetcode.com": "Coding", "stackoverflow.com": "Coding",
+  "zerodha.com": "Financial", "groww.in": "Financial",
 };
 
 function classifyTab(tab) {
-  if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("edge://") || tab.url.startsWith("chrome-extension://")) {
+  if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) {
     return "Other";
   }
 
   const domain = extractDomain(tab.url);
-  const rawText = (tab.title || "") + " " + domain;
-  const text = normalizeText(rawText);
 
   // 1. Exact domain whitelist
-  if (domain in domainRules) {
-    const rule = domainRules[domain];
-    if (rule !== null) return rule;
+  if (domain in domainRules && domainRules[domain] !== null) {
+    return domainRules[domain];
   }
 
-  // 2. TLD rules
-  if (domain.endsWith(".ac.in") || domain.endsWith(".edu") || domain.endsWith(".ac.uk") || domain.endsWith(".ac")) return "Study";
-  if (domain.endsWith(".gov.in") || domain.endsWith(".gov") || domain.endsWith(".nic.in")) return "Other";
+  // 2. TLD / Hard-coded Rules
+  // Study: .edu, .ac, .ac.in, .ac.uk
+  if (/\.(edu|ac|ac\.[a-z]{2})$/.test(domain)) return "Study";
   
-  // Financial check
-  if (domain.endsWith(".bank") || domain.includes(".bank.") || domain.includes("bank") || domain.includes("finance") || domain.includes("insurance")) {
-    return "Financial";
-  }
+  // Financial: .bank, or domain contains bank/finance/insurance
+  if (domain.endsWith(".bank") || /bank|finance|insurance/.test(domain)) return "Financial";
 
-  // 3. ML classification (only if modelData is ready)
-  if (modelData) {
+  // Other: .gov, .nic.in
+  if (/\.gov(\.[a-z]{2})?$/.test(domain) || domain.endsWith(".nic.in")) return "Other";
+
+  // 3. ML classification
+  if (isModelReady) {
+    const rawText = (tab.title || "") + " " + domain;
+    const text = normalizeText(rawText);
     const vector = computeTFIDF(text);
     const index = predict(vector);
     
     if (index !== -1) {
       const category = modelData.classes[index];
-      const shoppingKeywords = ["buy", "shop", "cart", "order", "price", "sale", "discount", "delivery", "offer", "deal", "checkout"];
       
-      // Verification logic for Shopping
-      if (category === "Shopping" && !shoppingKeywords.some(k => text.includes(k))) {
-        return "Other";
+      // Verification for Shopping
+      if (category === "Shopping") {
+        const shopKeywords = ["buy", "shop", "cart", "order", "price", "sale", "discount", "offer"];
+        if (!shopKeywords.some(k => text.includes(k))) return "Other";
       }
       return category;
     }
   }
 
-  // Fallback if model isn't ready or ML fails
   return "Other";
 }
