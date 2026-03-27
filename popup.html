@@ -10,42 +10,49 @@
 </head>
 <body>
 
+  <!-- ─── Header ─── -->
   <header class="header">
     <div class="header-brand">
+
+      <!-- Tabify Logo: stacked tab layers + AI brain network -->
       <div class="logo-mark">
-        <span class="logo-dot"></span><span class="logo-dot"></span>
-        <span class="logo-dot"></span><span class="logo-dot"></span>
+        <img src="new-logo.png" alt="Tabify AI Logo" class="logo-image">
       </div>
+
       <span class="brand-name">Tabify</span>
     </div>
+
     <div class="header-meta">
       <span class="tab-count" id="totalCount">12 tabs</span>
       <button class="icon-btn" title="Settings">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
           <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"
+                stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </button>
     </div>
   </header>
 
+  <!-- ─── Status Bar ─── -->
   <div class="status-bar">
     <div class="status-dot idle" id="statusDot"></div>
     <span class="status-text" id="statusText">Ready to analyse your tabs</span>
   </div>
 
+  <!-- ─── Action Zone ─── -->
   <div class="action-zone">
     <button class="btn-primary" id="autoGroupBtn">
       <span class="btn-label" id="btnLabel">Auto Group</span>
       <span class="btn-shortcut" id="btnShortcut">⌘G</span>
-      <div class="progress-container">
+      <div class="progress-container" id="progressContainer">
         <div class="progress-fill" id="progressFill"></div>
       </div>
     </button>
 
     <div class="secondary-actions">
-      <button class="btn-ghost">Save session</button>
-      <button class="btn-ghost">Clean up</button>
+      <button class="btn-ghost" id="saveSessionBtn">Save session</button>
+      <button class="btn-ghost" id="cleanupBtn">Clean up</button>
     </div>
 
     <div class="toggle-row" id="toggleRow">
@@ -60,21 +67,32 @@
     </div>
   </div>
 
+  <!-- ─── Active Groups ─── -->
   <section class="groups-section">
     <div class="section-header">
       <span class="section-label">Active groups</span>
-      <span class="pill">3</span>
+      <span class="pill" id="groupCount">0</span>
     </div>
-    <div class="groups-list">
-      <div class="group-card">
+
+    <div class="groups-list" id="groupsList">
+      <div class="empty-state" id="emptyState">
+        <p class="empty-title">No groups yet</p>
+        <p class="empty-sub">Hit Auto Group to organise your tabs</p>
+      </div>
+
+      <div class="group-card" id="sampleGroup" style="display:none;">
         <div class="group-header">
-          <span class="group-title">Research</span>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span class="group-color-dot" style="background:#4f9eff;width:8px;height:8px;border-radius:50%;display:inline-block;"></span>
+            <span class="group-title">Research</span>
+          </div>
           <span class="group-meta">4 tabs</span>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- ─── Footer ─── -->
   <footer class="footer">
     <div class="footer-indicators">
       <span class="indicator active"></span>
