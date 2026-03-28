@@ -1,152 +1,206 @@
-// Global variable to store model once loaded
-let modelData = null;
+
+let modelData    = null;
 let isModelReady = false;
 
 async function loadModel() {
   try {
-    const res = await fetch(chrome.runtime.getURL('model/model.json'));
-    modelData = await res.json();
+    // Prefer the cached copy in storage so we don't re-fetch every popup open
+    const cached = await chrome.storage.local.get("modelData");
+    if (cached.modelData) {
+      modelData    = cached.modelData;
+      isModelReady = true;
+      console.log("[Classifier] Loaded model from storage cache");
+      return;
+    }
+    const res = await fetch(chrome.runtime.getURL("model/model.json"));
+    modelData    = await res.json();
     isModelReady = true;
-    console.log("Classifier: Model loaded successfully");
+    await chrome.storage.local.set({ modelData });
+    console.log("[Classifier] Model fetched and cached");
   } catch (err) {
-    console.error("Classifier: Failed to load model", err);
+    console.error("[Classifier] Failed to load model", err);
   }
 }
 
 loadModel();
 
+// ─── Helpers ───
 function extractDomain(url) {
-  try {
-    let hostname = new URL(url).hostname;
-    return hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
+  try { return new URL(url).hostname.replace(/^www\./, ""); }
+  catch { return ""; }
 }
 
 function normalizeText(text) {
   if (!text) return "";
-  // Lowercase and remove non-alphanumeric characters to match Python tokenizers
-  text = text.toLowerCase().replace(/[^\w\s]/g, ' ');
-
-  const phraseMap = [
-    { pattern: /series [abc]/g, replace: "funding_round" },
-    { pattern: /(tv|web|netflix) series/g, replace: "tv_series" },
-    { pattern: /(stock|share) market/g, replace: "stock_market" },
-    { pattern: /online (shopping|buy)/g, replace: "online_shopping" }
-  ];
-
-  phraseMap.forEach(({ pattern, replace }) => {
-    text = text.replace(pattern, replace);
-  });
-
+  text = text.toLowerCase().replace(/[^\w\s]/g, " ");
+  [
+    [/series [abc]/g,            "funding_round"   ],
+    [/(tv|web|netflix) series/g,  "tv_series"       ],
+    [/(stock|share) market/g,     "stock_market"    ],
+    [/online (shopping|buy)/g,    "online_shopping" ],
+  ].forEach(([pat, rep]) => { text = text.replace(pat, rep); });
   return text.trim();
 }
 
 function computeTFIDF(text) {
   if (!modelData || !modelData.vocabulary) return [];
 
-  const words = text.split(/\s+/);
-  const vocab = modelData.vocabulary;
-  const idf = modelData.idf;
+  const words  = text.split(/\s+/);          // whitespace split — same as background.js
+  const vocab  = modelData.vocabulary;
+  const idf    = modelData.idf;
   const vector = new Array(Object.keys(vocab).length).fill(0);
-  const tf = {};
+  const tf     = {};
 
-  words.forEach(word => {
-    if (vocab[word] !== undefined) {
-      tf[word] = (tf[word] || 0) + 1;
-    }
+  words.forEach(w => {
+    if (vocab[w] !== undefined) tf[w] = (tf[w] || 0) + 1;
   });
-
-  for (let word in tf) {
-    const index = vocab[word];
-    vector[index] = tf[word] * idf[index];
+  for (const w in tf) {
+    vector[vocab[w]] = tf[w] * idf[vocab[w]];
   }
 
-  // --- L2 Normalization (Crucial for Scikit-Learn models) ---
-  const squareSum = vector.reduce((sum, val) => sum + (val * val), 0);
-  const norm = Math.sqrt(squareSum);
+  // L2 normalisation — scikit-learn LogisticRegression default
+  const squareSum = vector.reduce((s, v) => s + v * v, 0);
+  const norm      = Math.sqrt(squareSum);
   return norm > 0 ? vector.map(v => v / norm) : vector;
 }
 
 function predict(vector) {
   if (!modelData || !modelData.coef || vector.length === 0) return -1;
 
-  const weights = modelData.coef; 
-  const bias = modelData.intercept;
+  const weights = modelData.coef;
+  const bias    = modelData.intercept;
 
-  // Calculate scores (Logits)
   const scores = weights.map((w, i) => {
     let sum = bias[i];
-    for (let j = 0; j < vector.length; j++) {
-      sum += vector[j] * w[j];
-    }
+    for (let j = 0; j < vector.length; j++) sum += vector[j] * w[j];
     return sum;
   });
 
-  // Softmax for Probability Distribution
   const maxScore = Math.max(...scores);
-  const exps = scores.map(s => Math.exp(s - maxScore));
-  const sumExps = exps.reduce((a, b) => a + b, 0);
-  const probs = exps.map(e => e / sumExps);
-
-  const maxProb = Math.max(...probs);
+  const exps     = scores.map(s => Math.exp(s - maxScore));
+  const sumExps  = exps.reduce((a, b) => a + b, 0);
+  const probs    = exps.map(e => e / sumExps);
+  const maxProb  = Math.max(...probs);
   const maxIndex = probs.indexOf(maxProb);
 
-  // If confidence is low, default to 'Other'
   if (maxProb < 0.45) {
     const otherIdx = modelData.classes.indexOf("Other");
     return otherIdx !== -1 ? otherIdx : maxIndex;
   }
-
   return maxIndex;
 }
 
+// ─── YouTube keyword heuristic ───
+function classifyYouTube(title) {
+  const t = title.toLowerCase();
+
+  const studyKW = [
+    "lecture","tutorial","course","class","lesson",
+    "physics","chemistry","biology","mathematics","maths",
+    "calculus","algebra","integration","differentiation",
+    "thermodynamics","electrostatics","mechanics","optics",
+    "jee","neet","gate","upsc","cbse","ncert",
+    "physics wallah","khan academy","crashcourse","3blue1brown",
+    "mit opencourseware","nptel","vedantu","unacademy",
+    "abdul bari","cs50","andrew ng",
+    "data structures","algorithms","dsa","operating system",
+    "computer networks","dbms","discrete math",
+    "study","exam","syllabus","notes","solution",
+    "past paper","previous year","mock test",
+    "neural network explained","machine learning explained",
+    "what is","how does","how to learn",
+    "homework","assignment","textbook",
+  ];
+  const gameKW = [
+    "gameplay","walkthrough","playthrough","let's play","lets play",
+    "gaming","game","minecraft","fortnite","valorant","csgo",
+    "gta","roblox","pubg","freefire","cod","warzone",
+    "highlights","clutch","speedrun","patch notes","season update",
+  ];
+  const entKW = [
+    "trailer","mv","music video","official video","lyric video",
+    "song","album","playlist","podcast","interview",
+    "reaction","roast","challenge","prank","vlog",
+    "comedy","meme","shorts","trending","viral",
+    "movie","series","episode","season","web series",
+    "anime","asmr","mukbang","unboxing",
+    "mrbeast","pewdiepie","carryminati","bb ki vines",
+    "bollywood","hollywood","netflix","prime",
+  ];
+
+  let s = 0, g = 0, e = 0;
+  studyKW.forEach(k => { if (t.includes(k)) s += 2; });
+  gameKW.forEach(k  => { if (t.includes(k)) g++;    });
+  entKW.forEach(k   => { if (t.includes(k)) e++;    });
+
+  if (s > 0 && s >= g && s >= e) return "Study";
+  if (g > e && g > s)            return "Games";
+  if (e > 0)                     return "Entertainment";
+  return null;  // fall through to ML
+}
+
+// ─── Domain hard rules ───
 const domainRules = {
-  "google.com": "Other", "bing.com": "Other", "duckduckgo.com": "Other",
-  "yahoo.com": "Other", "google.co.in": "Other", "friv.com": "Games",
-  "poki.com": "Games", "chess.com": "Games", "miniclip.com": "Games",
-  "youtube.com": null, "netflix.com": "Entertainment", "twitch.tv": "Entertainment",
-  "github.com": "Coding", "leetcode.com": "Coding", "stackoverflow.com": "Coding",
-  "zerodha.com": "Financial", "groww.in": "Financial",
+  "google.com":        "Other",
+  "google.co.in":      "Other",
+  "bing.com":          "Other",
+  "duckduckgo.com":    "Other",
+  "yahoo.com":         "Other",
+  "friv.com":          "Games",
+  "poki.com":          "Games",
+  "chess.com":         "Games",
+  "miniclip.com":      "Games",
+  "netflix.com":       "Entertainment",
+  "hotstar.com":       "Entertainment",
+  "primevideo.com":    "Entertainment",
+  "twitch.tv":         "Entertainment",
+  "spotify.com":       "Entertainment",
+  "github.com":        "Coding",
+  "leetcode.com":      "Coding",
+  "stackoverflow.com": "Coding",
+  "zerodha.com":       "Financial",
+  "groww.in":          "Financial",
+  "hdfcbank.com":      "Financial",
+  "sbi.co.in":         "Financial",
+  "icicibank.com":     "Financial",
+  "paytm.com":         "Financial",
+  "myntra.com":        "Shopping",
+  "amazon.in":         "Shopping",
 };
 
+// ─── Main classifier (called by popup.js) ───
 function classifyTab(tab) {
-  if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) {
-    return "Other";
-  }
+  if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) return "Other";
 
   const domain = extractDomain(tab.url);
+  const title  = tab.title || "";
 
-  // 1. Exact domain whitelist
-  if (domain in domainRules && domainRules[domain] !== null) {
-    return domainRules[domain];
+  if (domain in domainRules) return domainRules[domain];
+
+  if (domain === "youtube.com") {
+    const r = classifyYouTube(title);
+    if (r !== null) return r;
   }
 
-  // 2. TLD / Hard-coded Rules
-  // Study: .edu, .ac, .ac.in, .ac.uk
-  if (/\.(edu|ac|ac\.[a-z]{2})$/.test(domain)) return "Study";
-  
-  // Financial: .bank, or domain contains bank/finance/insurance
-  if (domain.endsWith(".bank") || /bank|finance|insurance/.test(domain)) return "Financial";
+  if (/\.(edu|ac|ac\.[a-z]{2})$/.test(domain))                              return "Study";
+  if (/\.gov(\.[a-z]{2})?$/.test(domain) || domain.endsWith(".nic.in"))     return "Other";
+  if (domain.endsWith(".bank") || /\bbank\b|\bfinance\b|\binsurance\b/.test(domain)) return "Financial";
 
-  // Other: .gov, .nic.in
-  if (/\.gov(\.[a-z]{2})?$/.test(domain) || domain.endsWith(".nic.in")) return "Other";
-
-  // 3. ML classification
   if (isModelReady) {
-    const rawText = (tab.title || "") + " " + domain;
-    const text = normalizeText(rawText);
+    const text   = normalizeText(title + " " + domain);
     const vector = computeTFIDF(text);
-    const index = predict(vector);
-    
+    const index  = predict(vector);
+
     if (index !== -1) {
       const category = modelData.classes[index];
-      
-      // Verification for Shopping
       if (category === "Shopping") {
-        const shopKeywords = ["buy", "shop", "cart", "order", "price", "sale", "discount", "offer"];
-        if (!shopKeywords.some(k => text.includes(k))) return "Other";
+        const shopKW = [
+          "buy","shop","cart","order","price","sale","discount",
+          "offer","deal","checkout","purchase","delivery","store",
+          "myntra","flipkart","amazon","nykaa","ajio","meesho",
+          "snapdeal","croma","ikea","tatacliq"
+        ];
+        if (!shopKW.some(k => text.includes(k) || domain.includes(k))) return "Other";
       }
       return category;
     }
