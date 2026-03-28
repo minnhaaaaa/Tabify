@@ -45,7 +45,7 @@
     </button>
 
     <div class="secondary-actions">
-      <button class="btn-ghost" id="saveSessionBtn">Save session</button>
+      <button class="btn-ghost" id="saveSessionBtn">Save Workspace</button>
       <button class="btn-ghost" id="cleanupBtn">Clean up</button>
     </div>
 
@@ -83,15 +83,22 @@
     </div>
   </section>
 
+  <section class="groups-section" style="border-top: 1px solid var(--border); margin-top: 12px;">
+    <div class="section-header">
+      <span class="section-label">Saved Workspaces</span>
+    </div>
+    <div id="sessionsList" class="groups-list">
+      <p id="noSessions" style="text-align:center;opacity:0.5;padding:12px;font-size:11px;">No saved workspaces</p>
+    </div>
+  </section>
+
   <div id="cleanupPanel" class="overlay-panel" style="display:none;">
     <div class="panel-content">
       <div class="panel-header">
         <h3>Cleanup Suggestions</h3>
         <button id="closeCleanupPanel" class="close-btn">&times;</button>
       </div>
-      <div id="cleanupList" class="cleanup-list">
-        <!-- Inactive tabs will be listed here -->
-      </div>
+      <div id="cleanupList" class="cleanup-list"></div>
       <div class="panel-footer">
         <button id="closeAllSuggested" class="btn-danger">Close All Suggested</button>
       </div>
@@ -101,25 +108,32 @@
   <div id="savePanel" class="overlay-panel" style="display:none;">
     <div class="panel-content">
       <div class="panel-header">
-        <h3>Save Session</h3>
+        <h3>Save Workspace</h3>
         <button id="closeSavePanel" class="close-btn">&times;</button>
       </div>
       <div class="input-group">
-        <input type="text" id="sessionNameInput" placeholder="Session name (e.g. Research Project)">
+        <input type="text" id="sessionNameInput" placeholder="Workspace name (e.g. Research Project)">
+      </div>
+      <div class="selection-header" style="padding: 0 16px 8px; font-size: 11px; color: var(--text-3); font-family: var(--font-mono);">
+        SELECT TABS TO SAVE
+      </div>
+      <div id="tabSelectionList" class="cleanup-list" style="border-top: 1px solid var(--border);">
+        <!-- Current tabs with checkboxes will be listed here -->
       </div>
       <div class="panel-footer">
-        <button id="confirmSave" class="btn-primary">Save Current Tabs</button>
+        <button id="confirmSave" class="btn-primary">Save Selected Tabs</button>
       </div>
     </div>
   </div>
 
+  
   <footer class="footer">
     <div class="footer-indicators">
       <span class="indicator active"></span>
       <span class="indicator"></span>
       <span class="indicator"></span>
     </div>
-    <span class="footer-version">v1.0.5</span>
+    <span class="footer-version">v1.0.6</span>
   </footer>
 
   <script src="classifier.js"></script>

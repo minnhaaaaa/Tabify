@@ -20,13 +20,13 @@ const chromeColorToHex = {
   orange: "#fb923c",
 };
 
-// Helper : function extraction
+// Helper: Extract Domain 
 function extractDomain(url) {
   try { return new URL(url).hostname; }
   catch { return ""; }
 }
 
-// Helper: time ago
+// elper: Time Ago
 function timeAgo(timestamp) {
   const diff = Date.now() - timestamp;
   const mins = Math.floor(diff / 60000);
@@ -36,7 +36,7 @@ function timeAgo(timestamp) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// Status Bar
+//Status Bar
 function setStatus(state, message) {
   const dot  = document.querySelector(".status-dot");
   const text = document.getElementById("statusText");
@@ -48,7 +48,7 @@ function setStatus(state, message) {
   if (text) text.textContent = message;
 }
 
-// Update Counts
+//Update Counts
 function updateCounts(tabCount, groupCount) {
   const t = document.getElementById("totalCount");
   const g = document.getElementById("groupCount");
@@ -56,7 +56,9 @@ function updateCounts(tabCount, groupCount) {
   if (g) g.textContent = groupCount;
 }
 
-//Sync from browser so saved groups stay persistent
+
+//  SYNC FROM BROWSER  — run on every popup open
+
 async function syncGroupsFromBrowser() {
   const [allTabs, chromeGroups] = await Promise.all([
     chrome.tabs.query({ currentWindow: true }),
@@ -254,7 +256,7 @@ async function groupTabs() {
   }
 }
 
-//  Cleanup Logic 
+//Cleanup Logic
 async function loadCleanupSuggestions() {
   const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
   const thresholdMs = inactiveThreshold * 60 * 1000;
@@ -265,7 +267,6 @@ async function loadCleanupSuggestions() {
   if (!list) return;
   list.innerHTML = "";
 
-  // Filter tabs that have been inactive longer than the threshold
   const idleTabs = tabs.filter(t => {
     if (t.active || t.url.startsWith("chrome://")) return false;
     const lastAccessed = t.lastAccessed || now;
@@ -313,11 +314,79 @@ async function loadCleanupSuggestions() {
   }
 }
 
+// Workspace Logic
 async function loadSessions() {
-  const { tabifySessions } = await chrome.storage.local.get("tabifySessions");
-  const sessions   = tabifySessions || [];
-  const list       = document.getElementById("groupsList"); // Reusing list for simplicity or use a dedicated one
-  // Implementation for sessions can be added here if needed
+  const { tabifySessions } = await chrome.storage.local.get({ tabifySessions: [] });
+  const list = document.getElementById("sessionsList");
+  const noSessions = document.getElementById("noSessions");
+  if (!list) return;
+
+  list.querySelectorAll(".session-row").forEach(r => r.remove());
+
+  if (tabifySessions.length === 0) {
+    if (noSessions) noSessions.style.display = "block";
+    return;
+  }
+  if (noSessions) noSessions.style.display = "none";
+
+  for (let i = 0; i < tabifySessions.length; i++) {
+    const session = tabifySessions[i];
+    const row = document.createElement("div");
+    row.className = "session-row";
+    row.innerHTML = `
+      <div class="session-info">
+        <span class="session-name">${session.name}</span>
+        <span class="session-meta">${session.tabs.length} tabs · ${timeAgo(session.savedAt)}</span>
+      </div>
+      <div class="session-actions">
+        <button class="restore-btn" data-index="${i}">Restore</button>
+        <button class="delete-session-btn" data-index="${i}">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>`;
+    
+    row.querySelector(".restore-btn").addEventListener("click", async () => {
+      const urls = session.tabs.map(t => t.url);
+      if (urls.length > 0) {
+        await chrome.windows.create({ url: urls });
+      }
+    });
+
+    row.querySelector(".delete-session-btn").addEventListener("click", async () => {
+      const { tabifySessions: current } = await chrome.storage.local.get({ tabifySessions: [] });
+      current.splice(i, 1);
+      await chrome.storage.local.set({ tabifySessions: current });
+      loadSessions();
+    });
+
+    list.appendChild(row);
+  }
+}
+
+async function loadTabSelection() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const list = document.getElementById("tabSelectionList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  for (const tab of tabs) {
+    const item = document.createElement("div");
+    item.className = "tab-selection-item";
+    item.innerHTML = `
+      <input type="checkbox" data-tab-id="${tab.id}" data-url="${tab.url}" data-title="${tab.title}" checked>
+      <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=${extractDomain(tab.url)}&sz=16" alt=""/>
+      <span class="cleanup-title">${tab.title || tab.url}</span>
+    `;
+    item.addEventListener("click", (e) => {
+      if (e.target.tagName !== "INPUT") {
+        const cb = item.querySelector("input");
+        cb.checked = !cb.checked;
+      }
+    });
+    list.appendChild(item);
+  }
 }
 
 async function loadModel() {
@@ -335,6 +404,7 @@ async function loadModel() {
 document.addEventListener("DOMContentLoaded", async () => {
   await loadModel();
   await syncGroupsFromBrowser();
+  await loadSessions();
 
   // Inactive Slider Logic
   const inactiveSlider = document.getElementById("inactiveSlider");
@@ -359,7 +429,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const toggleStatus  = document.getElementById("toggleStatus");
   const toggleRow     = document.getElementById("toggleRow");
 
-  const { dynamicGrouping } = await chrome.storage.sync.get("dynamicGrouping");
+  const { dynamicGrouping } = await chrome.storage.sync.get({ dynamicGrouping: false });
   if (dynamicToggle) {
     dynamicToggle.checked = !!dynamicGrouping;
     if (dynamicToggle.checked && toggleStatus) {
@@ -423,8 +493,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     await syncGroupsFromBrowser();
   });
 
-  // Save session
+  // Save Workspace panel
   document.getElementById("saveSessionBtn")?.addEventListener("click", () => {
+    loadTabSelection();
     document.getElementById("savePanel").style.display = "flex";
   });
   document.getElementById("closeSavePanel")?.addEventListener("click", () => {
@@ -432,17 +503,31 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("confirmSave")?.addEventListener("click", async () => {
     const nameInput = document.getElementById("sessionNameInput");
-    const name = nameInput?.value.trim() || "Unnamed Session";
-    const currentTabs = await chrome.tabs.query({ currentWindow: true });
+    const name = nameInput?.value.trim() || "Unnamed Workspace";
+    
+    const selectedCheckboxes = document.querySelectorAll("#tabSelectionList input[type='checkbox']:checked");
+    const selectedTabs = Array.from(selectedCheckboxes).map(cb => ({
+      url: cb.dataset.url,
+      title: cb.dataset.title
+    }));
+
+    if (selectedTabs.length === 0) {
+      alert("Please select at least one tab to save.");
+      return;
+    }
+
     const session = {
       name,
-      tabs: currentTabs.map(t => ({ url: t.url, title: t.title })),
+      tabs: selectedTabs,
       savedAt: Date.now()
     };
+
     const { tabifySessions } = await chrome.storage.local.get({ tabifySessions: [] });
     tabifySessions.unshift(session);
     await chrome.storage.local.set({ tabifySessions });
+    
     document.getElementById("savePanel").style.display = "none";
     if (nameInput) nameInput.value = "";
+    await loadSessions();
   });
 });

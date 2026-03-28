@@ -1,7 +1,6 @@
-/* 
+/*
    Fonts: Syne + DM Mono
-   Theme: Dark precision
- */
+   Theme: Dark precision */
 
 :root {
   --bg:          #0e0f11;
@@ -45,9 +44,7 @@ body {
   overflow: hidden;
 }
 
-/* 
-   HEADER
- */
+/* header */
 .header {
   display: flex;
   align-items: center;
@@ -63,7 +60,7 @@ body {
   line-height: 1;
 }
 
-/* ── Logo Mark Container ── */
+/* ── Logo Mark (Container) ── */
 .logo-mark {
   display: flex;
   align-items: center;
@@ -82,7 +79,7 @@ body {
   overflow: hidden;
 }
 
-/* New Image Style  */
+/* ── New Image Style ── */
 .logo-image {
   width: 100%;
   height: 100%;
@@ -131,9 +128,7 @@ body {
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-1); }
 
-/* 
-   STATUS BAR
- */
+/* status bar */
 .status-bar {
   display: flex;
   align-items: center;
@@ -172,9 +167,7 @@ body {
   color: var(--text-3);
 }
 
-/* 
-   ACTION ZONE
-*/
+/* action zone */
 .action-zone {
   padding: 16px;
   display: flex;
@@ -356,9 +349,7 @@ input:checked + .toggle-slider::before {
   background: var(--accent);
 }
 
-/* 
-   GROUPS SECTION
- */
+/* groups section */
 .groups-section {
   border-top: 1px solid var(--border);
 }
@@ -445,9 +436,7 @@ input:checked + .toggle-slider::before {
   color: var(--text-3);
 }
 
-/* 
-   FOOTER
- */
+/* footer */
 .footer {
   display: flex;
   justify-content: space-between;
@@ -488,16 +477,12 @@ input:checked + .toggle-slider::before {
   opacity: 0.6;
 }
 
-/*
-   SCROLLBAR
-*/
+/* scrollbar */
 ::-webkit-scrollbar       { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 99px; }
 
-/* 
-   SLIDER & OVERLAY STYLES
-*/
+/* slider styles */
 .slider-container {
   margin-top: 8px;
   padding: 10px;
@@ -664,4 +649,94 @@ input:checked + .toggle-slider::before {
   border-radius: var(--radius-sm);
   color: white;
   outline: none;
+}
+
+/* 
+   workspace styles
+*/
+.tab-selection-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: var(--bg-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.tab-selection-item:hover {
+  background: var(--bg-hover);
+}
+
+.tab-selection-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.session-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.session-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+}
+
+.session-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.restore-btn {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  transition: background var(--transition);
+}
+
+.restore-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.delete-session-btn {
+  padding: 4px;
+  color: var(--text-3);
+  transition: color var(--transition);
+}
+
+.delete-session-btn:hover {
+  color: var(--danger);
 }
