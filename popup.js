@@ -8,7 +8,6 @@ const categoryColors = {
   Other:         "grey"
 };
 
-// Map Chrome colour names → hex for the dot in the card
 const chromeColorToHex = {
   blue:   "#4f9eff",
   pink:   "#ff6eb4",
@@ -21,13 +20,13 @@ const chromeColorToHex = {
   orange: "#fb923c",
 };
 
-// ─── Helper: Extract Domain ───
+// Helper : function extraction
 function extractDomain(url) {
   try { return new URL(url).hostname; }
   catch { return ""; }
 }
 
-// ─── Helper: Time Ago ───
+// Helper: time ago
 function timeAgo(timestamp) {
   const diff = Date.now() - timestamp;
   const mins = Math.floor(diff / 60000);
@@ -37,7 +36,7 @@ function timeAgo(timestamp) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ─── Status Bar ───
+// Status Bar
 function setStatus(state, message) {
   const dot  = document.querySelector(".status-dot");
   const text = document.getElementById("statusText");
@@ -49,7 +48,7 @@ function setStatus(state, message) {
   if (text) text.textContent = message;
 }
 
-// ─── Update Counts ───
+// Update Counts
 function updateCounts(tabCount, groupCount) {
   const t = document.getElementById("totalCount");
   const g = document.getElementById("groupCount");
@@ -57,18 +56,13 @@ function updateCounts(tabCount, groupCount) {
   if (g) g.textContent = groupCount;
 }
 
-// ══════════════════════════════════════════════════
-//  SYNC FROM BROWSER  — run on every popup open
-//  Reads real Chrome tab groups so the UI survives
-//  popup close/reopen and reflects Dynamic mode too.
-// ══════════════════════════════════════════════════
+//Sync from browser so saved groups stay persistent
 async function syncGroupsFromBrowser() {
   const [allTabs, chromeGroups] = await Promise.all([
     chrome.tabs.query({ currentWindow: true }),
     chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT })
   ]);
 
-  // Build groupId → { info, tabs[] }
   const groupMap = {};
   for (const g of chromeGroups) groupMap[g.id] = { info: g, tabs: [] };
   for (const tab of allTabs) {
@@ -91,7 +85,6 @@ async function syncGroupsFromBrowser() {
   setStatus("success", `${entries.length} group${entries.length > 1 ? "s" : ""} active`);
 }
 
-// ─── Render from real Chrome tab group objects ───
 function renderGroupsFromChrome(entries) {
   const list       = document.getElementById("groupsList");
   const emptyState = document.getElementById("emptyState");
@@ -156,7 +149,6 @@ function renderGroupsFromChrome(entries) {
   }
 }
 
-// ─── Render from { category: tabs[] } map (used right after Auto Group) ───
 function renderGroups(groups) {
   const list       = document.getElementById("groupsList");
   const emptyState = document.getElementById("emptyState");
@@ -220,7 +212,6 @@ function renderGroups(groups) {
   }
 }
 
-// ─── Group Tabs (Auto Group) ───
 async function groupTabs() {
   try {
     setStatus("working", "Analysing your tabs...");
@@ -231,12 +222,10 @@ async function groupTabs() {
     for (const tab of tabs) {
       if (!tab.url || tab.url.startsWith("chrome://")) continue;
       const category = typeof classifyTab === "function" ? classifyTab(tab) : "Other";
-      console.log(`[Tabify] ${tab.url} → ${category}  ("${tab.title}")`);
       if (!groups[category]) groups[category] = [];
       groups[category].push(tab);
     }
 
-    // Ungroup everything first so re-running Auto Group starts clean
     const existing = await chrome.tabGroups.query({
       windowId: chrome.windows.WINDOW_ID_CURRENT
     });
@@ -245,7 +234,6 @@ async function groupTabs() {
       if (gt.length) await chrome.tabs.ungroup(gt.map(t => t.id));
     }
 
-    // Create fresh groups
     for (const [category, tabsInGroup] of Object.entries(groups)) {
       const groupId = await chrome.tabs.group({ tabIds: tabsInGroup.map(t => t.id) });
       await chrome.tabGroups.update(groupId, {
@@ -266,102 +254,107 @@ async function groupTabs() {
   }
 }
 
-// ─── Cleanup Panel ───
+//  Cleanup Logic 
 async function loadCleanupSuggestions() {
+  const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
+  const thresholdMs = inactiveThreshold * 60 * 1000;
+  const now = Date.now();
+
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const list = document.getElementById("cleanupList");
   if (!list) return;
   list.innerHTML = "";
 
-  const idleTabs = tabs.filter(t => !t.active && !t.url.startsWith("chrome://"));
+  // Filter tabs that have been inactive longer than the threshold
+  const idleTabs = tabs.filter(t => {
+    if (t.active || t.url.startsWith("chrome://")) return false;
+    const lastAccessed = t.lastAccessed || now;
+    return (now - lastAccessed) > thresholdMs;
+  });
+
   if (idleTabs.length === 0) {
-    list.innerHTML = `<p style="text-align:center;opacity:0.5;padding:12px">No idle tabs found</p>`;
+    list.innerHTML = `<p style="text-align:center;opacity:0.5;padding:12px">No inactive tabs found (Threshold: ${inactiveThreshold}m)</p>`;
     return;
   }
-  for (const tab of idleTabs.slice(0, 5)) {
+
+  for (const tab of idleTabs) {
     const item = document.createElement("div");
     item.className = "cleanup-item";
+    const inactiveTime = Math.floor((now - (tab.lastAccessed || now)) / 60000);
+    
     item.innerHTML = `
       <div class="cleanup-item-info">
         <img class="tab-favicon"
           src="https://www.google.com/s2/favicons?domain=${extractDomain(tab.url)}&sz=16" alt=""/>
-        <div>
+        <div style="min-width: 0;">
           <p class="cleanup-title">${tab.title || tab.url}</p>
-          <p class="cleanup-age">Inactive tab</p>
+          <p class="cleanup-age">Inactive for ${inactiveTime}m</p>
         </div>
       </div>
       <div class="cleanup-item-actions">
         <button class="chip-btn keep">Keep</button>
         <button class="chip-btn close" data-tab-id="${tab.id}">Close</button>
       </div>`;
+    
     item.querySelector(".chip-btn.close").addEventListener("click", async () => {
-      await chrome.tabs.remove(tab.id); item.remove();
+      await chrome.tabs.remove(tab.id);
+      item.remove();
+      if (list.children.length === 0) {
+        list.innerHTML = `<p style="text-align:center;opacity:0.5;padding:12px">All cleared!</p>`;
+      }
     });
-    item.querySelector(".chip-btn.keep").addEventListener("click", () => item.remove());
+    item.querySelector(".chip-btn.keep").addEventListener("click", () => {
+      item.remove();
+      if (list.children.length === 0) {
+        list.innerHTML = `<p style="text-align:center;opacity:0.5;padding:12px">All cleared!</p>`;
+      }
+    });
     list.appendChild(item);
   }
 }
 
-// ─── Saved Sessions ───
-// Uses chrome.storage.local — localStorage is unreliable across popup open/close
 async function loadSessions() {
   const { tabifySessions } = await chrome.storage.local.get("tabifySessions");
   const sessions   = tabifySessions || [];
-  const list       = document.getElementById("sessionsList");
-  const noSessions = document.getElementById("noSessions");
-  if (!list) return;
-
-  list.querySelectorAll(".session-row").forEach(r => r.remove());
-
-  if (sessions.length === 0) {
-    if (noSessions) noSessions.style.display = "block";
-    return;
-  }
-  if (noSessions) noSessions.style.display = "none";
-
-  for (const session of sessions.slice(0, 3)) {
-    const row = document.createElement("div");
-    row.className = "session-row";
-    row.innerHTML = `
-      <div class="session-info">
-        <span class="session-name">${session.name}</span>
-        <span class="session-meta">${session.tabs.length} tabs · ${timeAgo(session.savedAt)}</span>
-      </div>
-      <button class="restore-btn">Restore</button>`;
-    row.querySelector(".restore-btn").addEventListener("click", async () => {
-      for (const tab of session.tabs) await chrome.tabs.create({ url: tab.url });
-    });
-    list.insertBefore(row, noSessions);
-  }
+  const list       = document.getElementById("groupsList"); // Reusing list for simplicity or use a dedicated one
+  // Implementation for sessions can be added here if needed
 }
 
-// ─── Model Loader ───
 async function loadModel() {
   try {
     const cached = await chrome.storage.local.get("modelData");
-    if (cached.modelData) return;   // already cached, skip fetch
-    const modelData = await fetch(chrome.runtime.getURL("model/model.json"))
-      .then(r => r.json());
+    if (cached.modelData) return;
+    const modelData = await fetch(chrome.runtime.getURL("model/model.json")).then(r => r.json());
     await chrome.storage.local.set({ modelData });
-    console.log("[Tabify] Model cached");
   } catch (e) {
-    console.warn("[Tabify] Model not found, using rule-based fallback.");
+    console.warn("[Tabify] Model fallback.");
   }
 }
 
-// ─── MAIN INIT ───
+// Initialization
 document.addEventListener("DOMContentLoaded", async () => {
-
-  // 1. Ensure model in storage (background.js reads from same cache)
   await loadModel();
-
-  // 2. Hydrate UI from actual browser state — groups persist across open/close
   await syncGroupsFromBrowser();
 
-  // 3. Sessions (persisted in chrome.storage.local now)
-  await loadSessions();
+  // Inactive Slider Logic
+  const inactiveSlider = document.getElementById("inactiveSlider");
+  const inactiveValue = document.getElementById("inactiveValue");
+  
+  const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
+  if (inactiveSlider && inactiveValue) {
+    inactiveSlider.value = inactiveThreshold;
+    inactiveValue.textContent = `${inactiveThreshold}m`;
+    
+    inactiveSlider.addEventListener("input", (e) => {
+      inactiveValue.textContent = `${e.target.value}m`;
+    });
+    
+    inactiveSlider.addEventListener("change", async (e) => {
+      await chrome.storage.sync.set({ inactiveThreshold: parseInt(e.target.value) });
+    });
+  }
 
-  // 4. Dynamic toggle
+  // Dynamic toggle
   const dynamicToggle = document.getElementById("dynamicToggle");
   const toggleStatus  = document.getElementById("toggleStatus");
   const toggleRow     = document.getElementById("toggleRow");
@@ -378,29 +371,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       await chrome.storage.sync.set({ dynamicGrouping: on });
       if (toggleStatus) toggleStatus.textContent = on ? "Live Active" : "Manual mode";
       on ? toggleRow?.classList.add("active-state") : toggleRow?.classList.remove("active-state");
-      setStatus(on ? "working" : "idle", on ? "Dynamic grouping enabled" : "Dynamic grouping disabled");
     });
   }
 
-  // 5. Auto-group button
-  const autoGroupBtn      = document.getElementById("autoGroupBtn");
-  const progressFill      = document.getElementById("progressFill");
-  const progressContainer = document.querySelector(".progress-container");
-  const btnLabel          = document.getElementById("btnLabel");
-  const btnShortcut       = document.getElementById("btnShortcut");
-
+  // Auto-group button
+  const autoGroupBtn = document.getElementById("autoGroupBtn");
   if (autoGroupBtn) {
     autoGroupBtn.addEventListener("click", async () => {
       autoGroupBtn.disabled = true;
-      let progress = 0;
-      if (btnLabel)          btnLabel.textContent            = "Organizing...";
-      if (btnShortcut)       btnShortcut.style.display       = "none";
+      const btnLabel = document.getElementById("btnLabel");
+      const progressFill = document.getElementById("progressFill");
+      const progressContainer = document.getElementById("progressContainer");
+      
+      if (btnLabel) btnLabel.textContent = "Organizing...";
       if (progressContainer) progressContainer.style.display = "block";
-
+      
+      let progress = 0;
       const interval = setInterval(() => {
-        progress += Math.random() * 20;
-        if (progress >= 90) { clearInterval(interval); progress = 90; }
-        if (progressFill) progressFill.style.width = progress + "%";
+        progress += 10;
+        if (progress > 90) progress = 90;
+        if (progressFill) progressFill.style.width = `${progress}%`;
       }, 100);
 
       await groupTabs();
@@ -408,16 +398,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       clearInterval(interval);
       if (progressFill) progressFill.style.width = "100%";
       setTimeout(() => {
-        if (btnLabel)          btnLabel.textContent            = "Auto Group";
-        if (btnShortcut)       btnShortcut.style.display       = "block";
+        if (btnLabel) btnLabel.textContent = "Auto Group";
         if (progressContainer) progressContainer.style.display = "none";
-        if (progressFill)      progressFill.style.width        = "0%";
+        if (progressFill) progressFill.style.width = "0%";
         autoGroupBtn.disabled = false;
-      }, 600);
+      }, 500);
     });
   }
 
-  // 6. Cleanup panel
+  // Cleanup panel
   document.getElementById("cleanupBtn")?.addEventListener("click", () => {
     loadCleanupSuggestions();
     document.getElementById("cleanupPanel").style.display = "flex";
@@ -426,12 +415,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("cleanupPanel").style.display = "none";
   });
   document.getElementById("closeAllSuggested")?.addEventListener("click", async () => {
-    for (const btn of document.querySelectorAll(".chip-btn.close[data-tab-id]"))
+    const btns = document.querySelectorAll(".chip-btn.close[data-tab-id]");
+    for (const btn of btns) {
       await chrome.tabs.remove(parseInt(btn.dataset.tabId));
+    }
     document.getElementById("cleanupPanel").style.display = "none";
+    await syncGroupsFromBrowser();
   });
 
-  // 7. Save session
+  // Save session
   document.getElementById("saveSessionBtn")?.addEventListener("click", () => {
     document.getElementById("savePanel").style.display = "flex";
   });
@@ -440,22 +432,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("confirmSave")?.addEventListener("click", async () => {
     const nameInput = document.getElementById("sessionNameInput");
-    const name = nameInput?.value.trim();
-    if (!name) return;
-
+    const name = nameInput?.value.trim() || "Unnamed Session";
     const currentTabs = await chrome.tabs.query({ currentWindow: true });
     const session = {
       name,
-      tabs:    currentTabs.map(t => ({ url: t.url, title: t.title })),
+      tabs: currentTabs.map(t => ({ url: t.url, title: t.title })),
       savedAt: Date.now()
     };
-    const { tabifySessions } = await chrome.storage.local.get("tabifySessions");
-    const list = tabifySessions || [];
-    list.unshift(session);
-    await chrome.storage.local.set({ tabifySessions: list });
-
+    const { tabifySessions } = await chrome.storage.local.get({ tabifySessions: [] });
+    tabifySessions.unshift(session);
+    await chrome.storage.local.set({ tabifySessions });
     document.getElementById("savePanel").style.display = "none";
     if (nameInput) nameInput.value = "";
-    await loadSessions();
   });
 });

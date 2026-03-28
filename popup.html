@@ -10,20 +10,16 @@
 </head>
 <body>
 
-  <!-- ─── Header ─── -->
   <header class="header">
     <div class="header-brand">
-
-      <!-- Tabify Logo: stacked tab layers + AI brain network -->
       <div class="logo-mark">
         <img src="new-logo.png" alt="Tabify AI Logo" class="logo-image">
       </div>
-
       <span class="brand-name">Tabify</span>
     </div>
 
     <div class="header-meta">
-      <span class="tab-count" id="totalCount">12 tabs</span>
+      <span class="tab-count" id="totalCount">0 tabs</span>
       <button class="icon-btn" title="Settings">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
           <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/>
@@ -34,13 +30,11 @@
     </div>
   </header>
 
-  <!-- ─── Status Bar ─── -->
   <div class="status-bar">
     <div class="status-dot idle" id="statusDot"></div>
     <span class="status-text" id="statusText">Ready to analyse your tabs</span>
   </div>
 
-  <!-- ─── Action Zone ─── -->
   <div class="action-zone">
     <button class="btn-primary" id="autoGroupBtn">
       <span class="btn-label" id="btnLabel">Auto Group</span>
@@ -65,9 +59,16 @@
         <span class="toggle-slider"></span>
       </label>
     </div>
+
+    <div class="slider-container">
+      <div class="slider-header">
+        <span class="slider-label">Inactive threshold</span>
+        <span class="slider-value" id="inactiveValue">20m</span>
+      </div>
+      <input type="range" id="inactiveSlider" min="2" max="45" value="20" class="range-slider">
+    </div>
   </div>
 
-  <!-- ─── Active Groups ─── -->
   <section class="groups-section">
     <div class="section-header">
       <span class="section-label">Active groups</span>
@@ -79,30 +80,49 @@
         <p class="empty-title">No groups yet</p>
         <p class="empty-sub">Hit Auto Group to organise your tabs</p>
       </div>
-
-      <div class="group-card" id="sampleGroup" style="display:none;">
-        <div class="group-header">
-          <div style="display:flex;align-items:center;gap:7px;">
-            <span class="group-color-dot" style="background:#4f9eff;width:8px;height:8px;border-radius:50%;display:inline-block;"></span>
-            <span class="group-title">Research</span>
-          </div>
-          <span class="group-meta">4 tabs</span>
-        </div>
-      </div>
     </div>
   </section>
 
-  <!-- ─── Footer ─── -->
+  <div id="cleanupPanel" class="overlay-panel" style="display:none;">
+    <div class="panel-content">
+      <div class="panel-header">
+        <h3>Cleanup Suggestions</h3>
+        <button id="closeCleanupPanel" class="close-btn">&times;</button>
+      </div>
+      <div id="cleanupList" class="cleanup-list">
+        <!-- Inactive tabs will be listed here -->
+      </div>
+      <div class="panel-footer">
+        <button id="closeAllSuggested" class="btn-danger">Close All Suggested</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="savePanel" class="overlay-panel" style="display:none;">
+    <div class="panel-content">
+      <div class="panel-header">
+        <h3>Save Session</h3>
+        <button id="closeSavePanel" class="close-btn">&times;</button>
+      </div>
+      <div class="input-group">
+        <input type="text" id="sessionNameInput" placeholder="Session name (e.g. Research Project)">
+      </div>
+      <div class="panel-footer">
+        <button id="confirmSave" class="btn-primary">Save Current Tabs</button>
+      </div>
+    </div>
+  </div>
+
   <footer class="footer">
     <div class="footer-indicators">
       <span class="indicator active"></span>
       <span class="indicator"></span>
       <span class="indicator"></span>
     </div>
-    <span class="footer-version">v1.0.4</span>
+    <span class="footer-version">v1.0.5</span>
   </footer>
-  <script src = "classifier.js"></script>
 
+  <script src="classifier.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -24,7 +24,7 @@ async function loadModel() {
 
 loadModel();
 
-// ─── Helpers ───
+// Helpers
 function extractDomain(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); }
   catch { return ""; }
@@ -91,7 +91,7 @@ function predict(vector) {
   return maxIndex;
 }
 
-// ─── YouTube keyword heuristic ───
+// YouTube keyword heuristic
 function classifyYouTube(title) {
   const t = title.toLowerCase();
 
@@ -140,7 +140,7 @@ function classifyYouTube(title) {
   return null;  // fall through to ML
 }
 
-// ─── Domain hard rules ───
+// Domain hard rules 
 const domainRules = {
   "google.com":        "Other",
   "google.co.in":      "Other",
@@ -169,7 +169,7 @@ const domainRules = {
   "amazon.in":         "Shopping",
 };
 
-// ─── Main classifier (called by popup.js) ───
+// Main classifier
 function classifyTab(tab) {
   if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) return "Other";
 
