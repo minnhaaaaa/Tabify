@@ -8,7 +8,7 @@ const categoryColors = {
   Other:         "grey"
 };
 
-//Listener
+// Listener
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete") return;
   if (!tab.url) return;
@@ -60,6 +60,7 @@ function normalizeTextBg(text) {
 }
 
 function computeTFIDBg(text, modelData) {
+  if (!modelData || !modelData.vocabulary) return [];
   const words  = text.split(/\s+/);
   const vocab  = modelData.vocabulary;
   const idf    = modelData.idf;
@@ -74,11 +75,13 @@ function computeTFIDBg(text, modelData) {
   }
 
   // L2 normalisation — required by scikit-learn LogisticRegression
-  const norm = Math.sqrt(vector.reduce((s, v) => s + v * v, 0));
+  const squareSum = vector.reduce((s, v) => s + v * v, 0);
+  const norm      = Math.sqrt(squareSum);
   return norm > 0 ? vector.map(v => v / norm) : vector;
 }
 
 function predictBg(vector, modelData) {
+  if (!modelData || !modelData.coef || vector.length === 0) return -1;
   const weights = modelData.coef;
   const bias    = modelData.intercept;
 
@@ -93,9 +96,14 @@ function predictBg(vector, modelData) {
   const sumExps  = exps.reduce((a, b) => a + b, 0);
   const probs    = exps.map(e => e / sumExps);
   const maxProb  = Math.max(...probs);
+  const maxIndex = probs.indexOf(maxProb);
 
-  if (maxProb < 0.45) return -1;
-  return scores.indexOf(maxScore);
+  // Increase confidence threshold to 0.65 to avoid misclassification
+  if (maxProb < 0.65) {
+    const otherIdx = modelData.classes.indexOf("Other");
+    return otherIdx !== -1 ? otherIdx : -1;
+  }
+  return maxIndex;
 }
 
 // YouTube keyword heuristic — identical to classifier.js
@@ -171,9 +179,13 @@ const domainRulesBg = {
   "sbi.co.in":         "Financial",
   "icicibank.com":     "Financial",
   "paytm.com":         "Financial",
+  "myntra.com":        "Shopping",
+  "amazon.in":         "Shopping",
 };
 
 function classifyTabBg(tab, modelData) {
+  if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) return "Other";
+
   const domain = extractDomainBg(tab.url);
   const title  = tab.title || "";
 

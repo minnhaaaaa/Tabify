@@ -83,9 +83,10 @@ function predict(vector) {
   const maxProb  = Math.max(...probs);
   const maxIndex = probs.indexOf(maxProb);
 
-  if (maxProb < 0.45) {
+  // Increase confidence threshold to 0.65 to avoid misclassification
+  if (maxProb < 0.65) {
     const otherIdx = modelData.classes.indexOf("Other");
-    return otherIdx !== -1 ? otherIdx : maxIndex;
+    return otherIdx !== -1 ? otherIdx : -1;
   }
   return maxIndex;
 }
