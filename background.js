@@ -79,19 +79,31 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-async function groupSingleTab(tab, modelData) {
-  const category = classifyTabBg(tab, modelData);
-  const existingGroups = await chrome.tabGroups.query({ windowId: tab.windowId });
-  const match = existingGroups.find(g => g.title === category);
+async function groupSingleTab(tab, modelData, retries = 3, delay = 500) {
+  try {
+    const category = classifyTabBg(tab, modelData);
+    const existingGroups = await chrome.tabGroups.query({ windowId: tab.windowId });
+    const match = existingGroups.find(g => g.title === category);
 
-  if (match) {
-    await chrome.tabs.group({ tabIds: [tab.id], groupId: match.id });
-  } else {
-    const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
-    await chrome.tabGroups.update(groupId, {
-      title: category,
-      color: categoryColors[category] || "grey"
-    });
+    if (match) {
+      await chrome.tabs.group({ tabIds: [tab.id], groupId: match.id });
+    } else {
+      const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
+      await chrome.tabGroups.update(groupId, {
+        title: category,
+        color: categoryColors[category] || "grey"
+      });
+    }
+  } catch (e) {
+    // Retry if Chrome is temporarily blocking tab edits (user dragging, etc.)
+    if (e.message && e.message.includes("Tabs cannot be edited") && retries > 0) {
+      console.warn(`[Grouping] Retrying in ${delay}ms (${retries} retries left)`);
+      setTimeout(() => {
+        groupSingleTab(tab, modelData, retries - 1, delay * 1.5);
+      }, delay);
+    } else {
+      console.error("[Grouping] Failed to group tab:", e);
+    }
   }
 }
 
