@@ -130,19 +130,21 @@ function predict(vector) {
   return maxIndex;
 }
 
-// ─── YouTube keyword heuristic (Improved) ───
-function classifyYouTube(title) {
+function classifyYouTubeBg(title) {
   const t = title.toLowerCase();
-  const studyKW = ["lecture","tutorial","course","class","lesson","physics","chemistry","biology","mathematics","maths","calculus","algebra","integration","differentiation","thermodynamics","electrostatics","mechanics","optics","jee","neet","gate","upsc","cbse","ncert","physics wallah","khan academy","crashcourse","3blue1brown","mit opencourseware","nptel","vedantu","vit","unacademy","abdul bari","cs50","andrew ng","data structures","algorithms","dsa","operating system","computer networks","dbms","discrete math","study","exam","syllabus","notes","solution","past paper","previous year","mock test","neural network explained","machine learning explained","what is","how does","how to learn","homework","assignment","textbook"];
-  const gameKW = ["gameplay","walkthrough","playthrough","let\\'s play","lets play","gaming","game","minecraft","fortnite","valorant","csgo","gta","roblox","pubg","freefire","cod","warzone","highlights","clutch","speedrun","patch notes","season update"];
+  const studyKW = ["lecture","tutorial","course","class","lesson","physics","chemistry","biology","mathematics","maths","calculus","algebra","integration","differentiation","thermodynamics","electrostatics","mechanics","optics","jee","neet","gate","upsc","cbse","ncert","physics wallah","khan academy","crashcourse","3blue1brown","mit opencourseware","nptel","vedantu","unacademy","abdul bari","cs50","andrew ng","data structures","algorithms","dsa","operating system","computer networks","dbms","discrete math","study","exam","syllabus","notes","solution","past paper","previous year","mock test","neural network explained","machine learning explained","what is","how does","how to learn","homework","assignment","textbook","vit"];
+  const gameKW = ["gameplay","walkthrough","playthrough","let's play","lets play","gaming","minecraft","fortnite","valorant","csgo","gta","roblox","pubg","freefire","cod","warzone","highlights","clutch","speedrun","patch notes","season update"];
+  const codeKW = ["how to code","learn to code","programming","coding","code","game development","game dev","unity","unreal","godot","pygame","project","build"]
   const entKW = ["trailer","mv","music video","official video","lyric video","song","album","playlist","podcast","interview","reaction","roast","challenge","prank","vlog","comedy","meme","shorts","trending","viral","movie","series","episode","season","web series","anime","asmr","mukbang","unboxing","mrbeast","pewdiepie","carryminati","bb ki vines","bollywood","hollywood","netflix","prime"];
 
-  let s = 0, g = 0, e = 0;
+  let s = 0, g = 0, e = 0,c=0;
+  codeKW.forEach(k => { if (t.includes(k)) c += 2; });
   studyKW.forEach(k => { if (t.includes(k)) s += 2; });
   gameKW.forEach(k  => { if (t.includes(k)) g++;    });
   entKW.forEach(k   => { if (t.includes(k)) e++;    });
 
   if (s > 0 && s >= g && s >= e) return "Study";
+  if (c > 0 && c >= g && c >= e) return "Coding";
   if (g > e && g > s)            return "Games";
   if (e > 0)                     return "Entertainment";
   return null;
