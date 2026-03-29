@@ -56,7 +56,8 @@ chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIn
 
 // ─── Dynamic Grouping Listener ───
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete") return;
+  // Trigger on status complete OR title change OR URL change (important for SPAs like YouTube)
+  if (changeInfo.status !== "complete" && !changeInfo.title && !changeInfo.url) return;
   if (!tab.url) return;
   if (/^(chrome|edge|chrome-extension):/.test(tab.url)) return;
 
@@ -64,7 +65,18 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!dynamicGrouping) return;
 
   const { modelData } = await chrome.storage.local.get("modelData");
-  await groupSingleTab(tab, modelData);
+
+  // Add a small delay for SPAs to ensure the title/URL has fully updated in the DOM
+  if (changeInfo.title || changeInfo.url || changeInfo.status === "complete") {
+    setTimeout(async () => {
+      try {
+        const updatedTab = await chrome.tabs.get(tabId);
+        await groupSingleTab(updatedTab, modelData);
+      } catch (e) {
+        console.error("Error updating tab group:", e);
+      }
+    }, 1000); // 1 second delay to be safe for YouTube/SPAs
+  }
 });
 
 async function groupSingleTab(tab, modelData) {
