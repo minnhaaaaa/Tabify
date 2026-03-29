@@ -86,7 +86,16 @@ async function groupSingleTab(tab, modelData, retries = 3, delay = 500) {
     const match = existingGroups.find(g => g.title === category);
 
     if (match) {
-      await chrome.tabs.group({ tabIds: [tab.id], groupId: match.id });
+      try {
+        await chrome.tabs.group({ tabIds: [tab.id], groupId: match.id });
+      } catch (e) {
+        // If the group was just closed, create a new one
+        const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
+        await chrome.tabGroups.update(groupId, {
+          title: category,
+          color: categoryColors[category] || "grey"
+        });
+      }
     } else {
       const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
       await chrome.tabGroups.update(groupId, {

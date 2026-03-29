@@ -65,10 +65,10 @@ function normalizeText(text) {
   if (!text) return "";
   text = text.toLowerCase();
   // Context-specific replacements (matching training script)
-  text = re.sub(/series [abc]/g, "funding_round", text);
-  text = re.sub(/series \d+/g, "product_series", text);
-  text = re.sub(/(tv|web|netflix|original|anime) series/g, "tv_series", text);
-  text = re.sub(/[^\w\s]/g, " ", text);
+  text = text.replace(/series [abc]/g, "funding_round");
+  text = text.replace(/series \d+/g, "product_series");
+  text = text.replace(/(tv|web|netflix|original|anime) series/g, "tv_series");
+  text = text.replace(/[^\w\s]/g, " ");
   return text.trim();
 }
 
