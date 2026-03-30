@@ -28,36 +28,62 @@ function extractDomain(url) {
 
 function extractRelevantTextFromUrl(url, domain, title) {
   let extractedText = "";
+
   if (domain === "youtube.com") {
-      const match = url.match(/[?&]search_query=([^&]+)/);
-      if (match) extractedText = decodeURIComponent(match[1].replace(/\+/g, " "));
-      // Also clean YouTube video titles
-      if (title && title.endsWith(" - YouTube")) {
-        extractedText = (extractedText ? extractedText + " " : "") + title.replace(" - YouTube", "");
-      } else if (title) {
-        extractedText = (extractedText ? extractedText + " " : "") + title;
-      }
+    const match = url.match(/[?&]search_query=([^&]+)/);
+    if (match) extractedText = decodeURIComponent(match[1].replace(/\+/g, " "));
+    // Clean and append title
+    const cleanTitle = title
+      ? title.replace(/ - YouTube$/, "").replace(/ \(\d+\)$/, "").trim()
+      : "";
+    if (cleanTitle) extractedText = (extractedText ? extractedText + " " : "") + cleanTitle;
+
   } else if (domain === "reddit.com") {
-      const searchMatch = url.match(/\/r\/[^/]+\/search[?&]q=([^&]+)/);
-      if (searchMatch) extractedText = decodeURIComponent(searchMatch[1].replace(/\+/g, " "));
-      else {
-        const postMatch = url.match(/\/r\/([^/]+)\/comments\/[^/]+\/([^/]+)/);
-        if (postMatch) extractedText = `${postMatch[1]} ${postMatch[2].replace(/_/g, " ")}`;
-      }
+    const searchMatch = url.match(/\/r\/[^/]+\/search[?&]q=([^&]+)/);
+    if (searchMatch) {
+      extractedText = decodeURIComponent(searchMatch[1].replace(/\+/g, " "));
+    } else {
+      const postMatch = url.match(/\/r\/([^/]+)\/comments\/[^/]+\/([^/]+)/);
+      if (postMatch) extractedText = `${postMatch[1]} ${postMatch[2].replace(/_/g, " ")}`;
+    }
+    // Always append title for Reddit - strip the " : subreddit" suffix
+    const cleanTitle = title
+      ? title.replace(/ : [^:]+$/, "").replace(/ - Reddit$/, "").trim()
+      : "";
+    if (cleanTitle && cleanTitle !== "reddit") {
+      extractedText = (extractedText ? extractedText + " " : "") + cleanTitle;
+    }
+
   } else if (domain === "quora.com") {
-      const searchMatch = url.match(/\/search[?&]q=([^&]+)/);
-      if (searchMatch) extractedText = decodeURIComponent(searchMatch[1].replace(/\+/g, " "));
-      else {
-        const questionMatch = url.match(/quora.com\/([^/]+)/);
-        if (questionMatch) extractedText = questionMatch[1].replace(/-/g, " ");
-      }
-  } else if (domain === "stackoverflow.com") {
-      const questionMatch = url.match(/stackoverflow.com\/questions\/\d+\/([^/]+)/);
+    const searchMatch = url.match(/\/search[?&]q=([^&]+)/);
+    if (searchMatch) {
+      extractedText = decodeURIComponent(searchMatch[1].replace(/\+/g, " "));
+    } else {
+      const questionMatch = url.match(/quora\.com\/([^/?#]+)/);
       if (questionMatch) extractedText = questionMatch[1].replace(/-/g, " ");
+    }
+    // Always append title for Quora - strip " - Quora" suffix
+    const cleanTitle = title
+      ? title.replace(/ - Quora$/, "").trim()
+      : "";
+    if (cleanTitle && cleanTitle !== "quora") {
+      extractedText = (extractedText ? extractedText + " " : "") + cleanTitle;
+    }
+
+  } else if (domain === "stackoverflow.com") {
+    const questionMatch = url.match(/\/questions\/\d+\/([^/?#]+)/);
+    if (questionMatch) extractedText = questionMatch[1].replace(/-/g, " ");
+    // Append title, strip " - Stack Overflow"
+    const cleanTitle = title
+      ? title.replace(/ - Stack Overflow$/, "").trim()
+      : "";
+    if (cleanTitle) extractedText = (extractedText ? extractedText + " " : "") + cleanTitle;
+
   } else if (["google.com", "bing.com", "duckduckgo.com"].includes(domain)) {
-      const match = url.match(/[?&]q=([^&]+)/);
-      if (match) extractedText = decodeURIComponent(match[1].replace(/\+/g, " "));
+    const match = url.match(/[?&]q=([^&]+)/);
+    if (match) extractedText = decodeURIComponent(match[1].replace(/\+/g, " "));
   }
+
   return extractedText.trim();
 }
 
@@ -123,7 +149,7 @@ function predict(vector) {
   const maxIndex = probs.indexOf(maxProb);
 
   // Confidence threshold for "Other"
-  if (maxProb < 0.5) { // Slightly lowered for better recall on augmented data
+  if (maxProb < 0.3) { // Slightly lowered for better recall on augmented data
     const otherIdx = modelData.classes.indexOf("Other");
     return otherIdx !== -1 ? otherIdx : -1;
   }
@@ -185,12 +211,14 @@ function classifyTab(tab) {
   const domain = extractDomain(tab.url);
   const title  = tab.title || "";
   let textToClassify = title + " " + domain;
+  console.log(`[Tabify] domain: ${domain} | text: "${textToClassify}"`);
 
   // Extract relevant text from URL and prioritize it
   const relevantUrlText = extractRelevantTextFromUrl(tab.url, domain, title);
   if (relevantUrlText) {
-    textToClassify = relevantUrlText + " " + domain; 
+    textToClassify = (relevantUrlText || title )+ " " + domain; 
   }
+  console.log(`[Tabify] domain: ${domain} | text: "${textToClassify}"`);
 
   if (domain in domainRules) return domainRules[domain];
 
