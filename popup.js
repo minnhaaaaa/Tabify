@@ -223,7 +223,15 @@ async function groupTabs() {
 
     for (const tab of tabs) {
       if (!tab.url || tab.url.startsWith("chrome://")) continue;
-      const category = typeof classifyTab === "function" ? classifyTab(tab) : "Other";
+      let category = "Other";
+      if (typeof classifyTab === "function") {
+        try {
+          category = await classifyTab(tab);
+        } catch (e) {
+          console.error("[Tabify] Classification error:", e);
+          category = "Other";
+        }
+      }
       if (!groups[category]) groups[category] = [];
       groups[category].push(tab);
     }

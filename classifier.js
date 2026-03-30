@@ -205,11 +205,26 @@ const domainRules = {
   "amazon.in":         "Shopping",
 };
 
-function classifyTab(tab) {
+async function classifyTab(tab) {
   if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) return "Other";
 
   const domain = extractDomain(tab.url);
   const title  = tab.title || "";
+  
+  // 1. Check User Corrections (Personalized Layer - 2x Weight equivalent)
+  const { userCorrections = [] } = await chrome.storage.local.get("userCorrections");
+  const exactMatch = userCorrections.findLast(c => c.domain === domain && c.title === title);
+  if (exactMatch) return exactMatch.category;
+
+  const domainMatch = userCorrections.filter(c => c.domain === domain);
+  if (domainMatch.length >= 3) {
+    // If user consistently puts this domain in a specific category, use it
+    const counts = {};
+    domainMatch.forEach(c => counts[c.category] = (counts[c.category] || 0) + 1);
+    const topCategory = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+    if (counts[topCategory] >= domainMatch.length * 0.6) return topCategory;
+  }
+
   let textToClassify = title + " " + domain;
   console.log(`[Tabify] domain: ${domain} | text: "${textToClassify}"`);
 
@@ -223,7 +238,7 @@ function classifyTab(tab) {
   if (domain in domainRules) return domainRules[domain];
 
   if (domain === "youtube.com") {
-    const r = classifyYouTube(title);
+    const r = classifyYouTubeBg(title);
     if (r !== null) return r;
   }
 

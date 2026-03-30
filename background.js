@@ -54,6 +54,58 @@ chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIn
   }
 });
 
+// ─── Ground Truth Collection (Manual Group Movement) ───
+chrome.tabs.onMoved.addListener(async (tabId, moveInfo) => {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+    const group = await chrome.tabGroups.get(tab.groupId);
+    if (group.title) {
+      await saveCorrection(tab, group.title);
+    }
+  }
+});
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  const tab = await chrome.tabs.get(activeInfo.tabId);
+  if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+    const group = await chrome.tabGroups.get(tab.groupId);
+    if (group.title) {
+      await saveCorrection(tab, group.title);
+    }
+  }
+});
+
+async function saveCorrection(tab, manualCategory) {
+  if (!tab.url || tab.url.startsWith("chrome://")) return;
+  
+  const domain = extractDomainBg(tab.url);
+  const title = tab.title || "";
+  const correction = {
+    domain,
+    title,
+    category: manualCategory,
+    timestamp: Date.now()
+  };
+
+  const { userCorrections = [] } = await chrome.storage.local.get("userCorrections");
+  
+  // Avoid duplicate corrections for the same domain/title/category within a short time
+  const isDuplicate = userCorrections.some(c => 
+    c.domain === domain && 
+    c.title === title && 
+    c.category === manualCategory && 
+    (Date.now() - c.timestamp) < 60000
+  );
+
+  if (!isDuplicate) {
+    userCorrections.push(correction);
+    // Keep only the last 200 corrections to manage storage
+    if (userCorrections.length > 200) userCorrections.shift();
+    await chrome.storage.local.set({ userCorrections });
+    console.log(`[Tabify] Saved correction: ${domain} -> ${manualCategory}`);
+  }
+}
+
 // ─── Dynamic Grouping Listener ───
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // Trigger on status complete OR title change OR URL change (important for SPAs like YouTube)
@@ -81,7 +133,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 async function groupSingleTab(tab, modelData, retries = 3, delay = 500) {
   try {
-    const category = classifyTabBg(tab, modelData);
+    const category = await classifyTabBg(tab, modelData);
     const existingGroups = await chrome.tabGroups.query({ windowId: tab.windowId });
     const match = existingGroups.find(g => g.title === category);
 
@@ -295,12 +347,26 @@ const domainRulesBg = {
   "amazon.in":         "Shopping",
 };
 
-function classifyTabBg(tab, modelData) {
+async function classifyTabBg(tab, modelData) {
   if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) return "Other";
   const domain = extractDomainBg(tab.url);
   const title  = tab.title || "";
-  let textToClassify = title + " " + domain;
+  
+  // 1. Check User Corrections (Personalized Layer - 2x Weight equivalent)
+  const { userCorrections = [] } = await chrome.storage.local.get("userCorrections");
+  const exactMatch = userCorrections.findLast(c => c.domain === domain && c.title === title);
+  if (exactMatch) return exactMatch.category;
 
+  const domainMatch = userCorrections.filter(c => c.domain === domain);
+  if (domainMatch.length >= 3) {
+    // If user consistently puts this domain in a specific category, use it
+    const counts = {};
+    domainMatch.forEach(c => counts[c.category] = (counts[c.category] || 0) + 1);
+    const topCategory = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+    if (counts[topCategory] >= domainMatch.length * 0.6) return topCategory;
+  }
+
+  let textToClassify = title + " " + domain;
   const relevantUrlText = extractRelevantTextFromUrlBg(tab.url, domain, title);
   if (relevantUrlText) {
     textToClassify = (relevantUrlText || title) + " " + domain;
