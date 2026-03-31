@@ -488,14 +488,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       setStatus("working", "Ungrouping all tabs...");
       const groups = await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-      
       for (const group of groups) {
         const tabs = await chrome.tabs.query({ groupId: group.id });
-        if (tabs.length > 0) {
-          await chrome.tabs.ungroup(tabs.map(t => t.id));
-        }
+        if (tabs.length > 0) await chrome.tabs.ungroup(tabs.map(t => t.id));
       }
-      
       const allTabs = await chrome.tabs.query({ currentWindow: true });
       updateCounts(allTabs.length, 0);
       renderGroups({});
@@ -503,6 +499,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (err) {
       console.error("Ungrouping failed:", err);
       setStatus("error", "Error ungrouping tabs");
+    }
+  });
+
+  // Delete All Groups
+  document.getElementById("deleteAllGroupsBtn")?.addEventListener("click", async () => {
+    if (!confirm("Are you sure you want to close all tabs that are in groups?")) return;
+    try {
+      setStatus("working", "Deleting all groups...");
+      const groups = await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+      for (const group of groups) {
+        const tabs = await chrome.tabs.query({ groupId: group.id });
+        if (tabs.length > 0) await chrome.tabs.remove(tabs.map(t => t.id));
+      }
+      const allTabs = await chrome.tabs.query({ currentWindow: true });
+      updateCounts(allTabs.length, 0);
+      renderGroups({});
+      setStatus("success", "All grouped tabs closed");
+    } catch (err) {
+      console.error("Deleting groups failed:", err);
+      setStatus("error", "Error deleting groups");
     }
   });
   document.getElementById("closeCleanupPanel")?.addEventListener("click", () => {

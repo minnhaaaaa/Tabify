@@ -9,7 +9,10 @@ const categoryColors = {
 };
 
 // ─── Periodic LRU Notification ───
-chrome.alarms.create("lruCheck", { periodInMinutes: 30 });
+chrome.runtime.onInstalled.addListener(async () => {
+  const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
+  chrome.alarms.create("lruCheck", { periodInMinutes: inactiveThreshold });
+});
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "lruCheck") {
@@ -291,7 +294,7 @@ function predictBg(vector, modelData) {
   const maxProb  = Math.max(...probs);
   const maxIndex = probs.indexOf(maxProb);
 
-  if (maxProb < 0.3) {
+  if (maxProb < 0.5) {
     const otherIdx = modelData.classes.indexOf("Other");
     return otherIdx !== -1 ? otherIdx : -1;
   }

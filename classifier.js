@@ -149,7 +149,7 @@ function predict(vector) {
   const maxIndex = probs.indexOf(maxProb);
 
   // Confidence threshold for "Other"
-  if (maxProb < 0.3) { // Slightly lowered for better recall on augmented data
+  if (maxProb < 0.5) { // Slightly lowered for better recall on augmented data
     const otherIdx = modelData.classes.indexOf("Other");
     return otherIdx !== -1 ? otherIdx : -1;
   }

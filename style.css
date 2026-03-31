@@ -241,7 +241,7 @@ body {
 /* Secondary ghost buttons */
 .secondary-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
@@ -263,6 +263,12 @@ body {
   background: var(--bg-hover);
   color: var(--text-1);
   border-color: rgba(255,255,255,0.2);
+}
+
+.btn-ghost.danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(255, 91, 91, 0.05);
 }
 
 /* Toggle row */
