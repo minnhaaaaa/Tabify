@@ -10,6 +10,7 @@
 </head>
 <body>
 
+  <!-- ─── Header ─── -->
   <header class="header">
     <div class="header-brand">
       <div class="logo-mark">
@@ -30,11 +31,13 @@
     </div>
   </header>
 
+  <!-- ─── Status Bar ─── -->
   <div class="status-bar">
     <div class="status-dot idle" id="statusDot"></div>
     <span class="status-text" id="statusText">Ready to analyse your tabs</span>
   </div>
 
+  <!-- ─── Action Zone ─── -->
   <div class="action-zone">
     <button class="btn-primary" id="autoGroupBtn">
       <span class="btn-label" id="btnLabel">Auto Group</span>
@@ -47,6 +50,7 @@
     <div class="secondary-actions">
       <button class="btn-ghost" id="saveSessionBtn">Save Workspace</button>
       <button class="btn-ghost" id="cleanupBtn">Clean up</button>
+      <button class="btn-ghost" id="ungroupAllBtn">Ungroup All</button>
     </div>
 
     <div class="toggle-row" id="toggleRow">
@@ -60,6 +64,7 @@
       </label>
     </div>
 
+    <!-- Inactive Slider -->
     <div class="slider-container">
       <div class="slider-header">
         <span class="slider-label">Inactive threshold</span>
@@ -69,6 +74,7 @@
     </div>
   </div>
 
+  <!-- ─── Active Groups ─── -->
   <section class="groups-section">
     <div class="section-header">
       <span class="section-label">Active groups</span>
@@ -83,6 +89,7 @@
     </div>
   </section>
 
+  <!-- ─── Saved Workspaces ─── -->
   <section class="groups-section" style="border-top: 1px solid var(--border); margin-top: 12px;">
     <div class="section-header">
       <span class="section-label">Saved Workspaces</span>
@@ -92,6 +99,7 @@
     </div>
   </section>
 
+  <!-- ─── Cleanup Panel (Overlay) ─── -->
   <div id="cleanupPanel" class="overlay-panel" style="display:none;">
     <div class="panel-content">
       <div class="panel-header">
@@ -105,6 +113,7 @@
     </div>
   </div>
 
+  <!-- ─── Save Workspace Panel (Overlay) ─── -->
   <div id="savePanel" class="overlay-panel" style="display:none;">
     <div class="panel-content">
       <div class="panel-header">
@@ -126,7 +135,7 @@
     </div>
   </div>
 
-  
+  <!-- ─── Footer ─── -->
   <footer class="footer">
     <div class="footer-indicators">
       <span class="indicator active"></span>

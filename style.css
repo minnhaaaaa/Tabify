@@ -1,6 +1,7 @@
-/*
+/* ═══════════════════════════════════════════
    Fonts: Syne + DM Mono
-   Theme: Dark precision */
+   Theme: Dark precision
+═══════════════════════════════════════════ */
 
 :root {
   --bg:          #0e0f11;
@@ -44,7 +45,9 @@ body {
   overflow: hidden;
 }
 
-/* header */
+/* ══════════════════════════
+   HEADER
+══════════════════════════ */
 .header {
   display: flex;
   align-items: center;
@@ -128,7 +131,9 @@ body {
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-1); }
 
-/* status bar */
+/* ══════════════════════════
+   STATUS BAR
+══════════════════════════ */
 .status-bar {
   display: flex;
   align-items: center;
@@ -167,7 +172,9 @@ body {
   color: var(--text-3);
 }
 
-/* action zone */
+/* ══════════════════════════
+   ACTION ZONE
+══════════════════════════ */
 .action-zone {
   padding: 16px;
   display: flex;
@@ -234,7 +241,7 @@ body {
 /* Secondary ghost buttons */
 .secondary-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -349,7 +356,9 @@ input:checked + .toggle-slider::before {
   background: var(--accent);
 }
 
-/* groups section */
+/* ══════════════════════════
+   GROUPS SECTION
+══════════════════════════ */
 .groups-section {
   border-top: 1px solid var(--border);
 }
@@ -436,7 +445,9 @@ input:checked + .toggle-slider::before {
   color: var(--text-3);
 }
 
-/* footer */
+/* ══════════════════════════
+   FOOTER
+══════════════════════════ */
 .footer {
   display: flex;
   justify-content: space-between;
@@ -477,12 +488,16 @@ input:checked + .toggle-slider::before {
   opacity: 0.6;
 }
 
-/* scrollbar */
+/* ══════════════════════════
+   SCROLLBAR
+══════════════════════════ */
 ::-webkit-scrollbar       { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 99px; }
 
-/* slider styles */
+/* ══════════════════════════
+   SLIDER & OVERLAY STYLES
+══════════════════════════ */
 .slider-container {
   margin-top: 8px;
   padding: 10px;
@@ -651,9 +666,9 @@ input:checked + .toggle-slider::before {
   outline: none;
 }
 
-/* 
-   workspace styles
-*/
+/* ══════════════════════════
+   WORKSPACE & SELECTION STYLES
+══════════════════════════ */
 .tab-selection-item {
   display: flex;
   align-items: center;

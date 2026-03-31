@@ -8,6 +8,7 @@ const categoryColors = {
   Other:         "grey"
 };
 
+// Map Chrome colour names → hex for the dot in the card
 const chromeColorToHex = {
   blue:   "#4f9eff",
   pink:   "#ff6eb4",
@@ -20,13 +21,13 @@ const chromeColorToHex = {
   orange: "#fb923c",
 };
 
-// Helper: Extract Domain 
+// ─── Helper: Extract Domain ───
 function extractDomain(url) {
   try { return new URL(url).hostname; }
   catch { return ""; }
 }
 
-// elper: Time Ago
+// ─── Helper: Time Ago ───
 function timeAgo(timestamp) {
   const diff = Date.now() - timestamp;
   const mins = Math.floor(diff / 60000);
@@ -36,7 +37,7 @@ function timeAgo(timestamp) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-//Status Bar
+// ─── Status Bar ───
 function setStatus(state, message) {
   const dot  = document.querySelector(".status-dot");
   const text = document.getElementById("statusText");
@@ -48,7 +49,7 @@ function setStatus(state, message) {
   if (text) text.textContent = message;
 }
 
-//Update Counts
+// ─── Update Counts ───
 function updateCounts(tabCount, groupCount) {
   const t = document.getElementById("totalCount");
   const g = document.getElementById("groupCount");
@@ -56,9 +57,9 @@ function updateCounts(tabCount, groupCount) {
   if (g) g.textContent = groupCount;
 }
 
-
+// ══════════════════════════════════════════════════
 //  SYNC FROM BROWSER  — run on every popup open
-
+// ══════════════════════════════════════════════════
 async function syncGroupsFromBrowser() {
   const [allTabs, chromeGroups] = await Promise.all([
     chrome.tabs.query({ currentWindow: true }),
@@ -223,15 +224,7 @@ async function groupTabs() {
 
     for (const tab of tabs) {
       if (!tab.url || tab.url.startsWith("chrome://")) continue;
-      let category = "Other";
-      if (typeof classifyTab === "function") {
-        try {
-          category = await classifyTab(tab);
-        } catch (e) {
-          console.error("[Tabify] Classification error:", e);
-          category = "Other";
-        }
-      }
+      const category = typeof classifyTab === "function" ? await classifyTab(tab) : "Other";
       if (!groups[category]) groups[category] = [];
       groups[category].push(tab);
     }
@@ -264,7 +257,7 @@ async function groupTabs() {
   }
 }
 
-//Cleanup Logic
+// ─── Cleanup Logic ───
 async function loadCleanupSuggestions() {
   const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
   const thresholdMs = inactiveThreshold * 60 * 1000;
@@ -322,7 +315,7 @@ async function loadCleanupSuggestions() {
   }
 }
 
-// Workspace Logic
+// ─── Workspace/Session Logic ───
 async function loadSessions() {
   const { tabifySessions } = await chrome.storage.local.get({ tabifySessions: [] });
   const list = document.getElementById("sessionsList");
@@ -408,7 +401,7 @@ async function loadModel() {
   }
 }
 
-// Initialization
+// ─── MAIN INIT ───
 document.addEventListener("DOMContentLoaded", async () => {
   await loadModel();
   await syncGroupsFromBrowser();
@@ -488,6 +481,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("cleanupBtn")?.addEventListener("click", () => {
     loadCleanupSuggestions();
     document.getElementById("cleanupPanel").style.display = "flex";
+  });
+
+  // Ungroup All
+  document.getElementById("ungroupAllBtn")?.addEventListener("click", async () => {
+    try {
+      setStatus("working", "Ungrouping all tabs...");
+      const groups = await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+      
+      for (const group of groups) {
+        const tabs = await chrome.tabs.query({ groupId: group.id });
+        if (tabs.length > 0) {
+          await chrome.tabs.ungroup(tabs.map(t => t.id));
+        }
+      }
+      
+      const allTabs = await chrome.tabs.query({ currentWindow: true });
+      updateCounts(allTabs.length, 0);
+      renderGroups({});
+      setStatus("success", "All tabs ungrouped");
+    } catch (err) {
+      console.error("Ungrouping failed:", err);
+      setStatus("error", "Error ungrouping tabs");
+    }
   });
   document.getElementById("closeCleanupPanel")?.addEventListener("click", () => {
     document.getElementById("cleanupPanel").style.display = "none";
