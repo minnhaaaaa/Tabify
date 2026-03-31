@@ -112,7 +112,7 @@ function computeTFIDF(text) {
     if (vocab[w] !== undefined) tf[w] = (tf[w] || 0) + 1;
   });
 
-  // Bigrams (if model supports it)
+  // Bigrams
   if (modelData.ngram_range && modelData.ngram_range[1] >= 2) {
     for (let i = 0; i < words.length - 1; i++) {
       const bigram = `${words[i]} ${words[i+1]}`;
@@ -148,8 +148,8 @@ function predict(vector) {
   const maxProb  = Math.max(...probs);
   const maxIndex = probs.indexOf(maxProb);
 
-  // Confidence threshold for "Other"
-  if (maxProb < 0.5) { // Slightly lowered for better recall on augmented data
+  // Confidence threshold for Other
+  if (maxProb < 0.5) { 
     const otherIdx = modelData.classes.indexOf("Other");
     return otherIdx !== -1 ? otherIdx : -1;
   }
@@ -211,7 +211,7 @@ async function classifyTab(tab) {
   const domain = extractDomain(tab.url);
   const title  = tab.title || "";
   
-  // 1. Check User Corrections (Personalized Layer - 2x Weight equivalent)
+  // 1. Check User Corrections
   const { userCorrections = [] } = await chrome.storage.local.get("userCorrections");
   const exactMatch = userCorrections.findLast(c => c.domain === domain && c.title === title);
   if (exactMatch) return exactMatch.category;
@@ -253,10 +253,6 @@ async function classifyTab(tab) {
 
     if (index !== -1) {
       const category = modelData.classes[index];
-      if (category === "Shopping") {
-        const shopKW = ["buy","shop","cart","order","price","sale","discount","offer","deal","checkout","purchase","delivery","store","myntra","flipkart","amazon","nykaa","ajio","meesho","snapdeal","croma","ikea","tatacliq"];
-        if (!shopKW.some(k => text.includes(k) || domain.includes(k))) return "Other";
-      }
       return category;
     }
   }

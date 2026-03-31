@@ -421,7 +421,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     
     inactiveSlider.addEventListener("change", async (e) => {
-      await chrome.storage.sync.set({ inactiveThreshold: parseInt(e.target.value) });
+      const val = parseInt(e.target.value);
+      await chrome.storage.sync.set({ inactiveThreshold: val });
+      // Trigger a test check when threshold changes
+      chrome.runtime.sendMessage({ action: "testInactivity" });
     });
   }
 

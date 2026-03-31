@@ -14,46 +14,131 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create("lruCheck", { periodInMinutes: inactiveThreshold });
 });
 
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === "lruCheck") {
+chrome.runtime.onStartup.addListener(async () => {
+  const alarm = await chrome.alarms.get("lruCheck");
+  if (!alarm) {
     const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
-    const thresholdMs = inactiveThreshold * 60 * 1000;
-    const now = Date.now();
-
-    const tabs = await chrome.tabs.query({});
-    const idleTabs = tabs.filter(t => !t.active && !t.url.startsWith("chrome://") && (now - (t.lastAccessed || now)) > thresholdMs);
-
-    if (idleTabs.length > 0) {
-      idleTabs.sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
-      const lruTab = idleTabs[0];
-
-      chrome.notifications.create("lruNotification", {
-        type: "basic",
-        iconUrl: "new-logo.png",
-        title: "Tabify Cleanup",
-        message: `Your tab "${lruTab.title.substring(0, 30)}..." hasn\\'t been used in a while. Want to close it?`,
-        buttons: [
-          { title: "Close Tab" },
-          { title: "Review All Inactive" }
-        ],
-        priority: 1
-      });
-
-      await chrome.storage.local.set({ lastLruTabId: lruTab.id });
-    }
+    chrome.alarms.create("lruCheck", { periodInMinutes: inactiveThreshold });
   }
 });
 
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  console.log("[Tabify] Alarm fired:", alarm.name);
+  if (alarm.name === "lruCheck") {
+    await checkInactiveTabs();
+
+    // Reschedule with current threshold
+    const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
+    chrome.alarms.clear("lruCheck", () => {
+      chrome.alarms.create("lruCheck", { periodInMinutes: inactiveThreshold });
+    });
+  }
+});
+
+// ─── Restart alarm when user changes inactiveThreshold ───
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync" && changes.inactiveThreshold) {
+    const newInterval = changes.inactiveThreshold.newValue || 20;
+    chrome.alarms.clear("lruCheck", () => {
+      chrome.alarms.create("lruCheck", { periodInMinutes: newInterval });
+    });
+  }
+});
+
+async function checkInactiveTabs() {
+  const { inactiveThreshold } = await chrome.storage.sync.get({ inactiveThreshold: 20 });
+  const thresholdMs = inactiveThreshold * 60 * 1000 * 0.8; // 80% to ensure tabs qualify
+  const now = Date.now();
+
+  const tabs = await chrome.tabs.query({});
+
+  console.log("[Tabify] All tabs:", tabs.map(t => ({
+    title: t.title,
+    active: t.active,
+    lastAccessed: t.lastAccessed,
+    url: t.url
+  })));
+
+  const idleTabs = tabs.filter(t =>
+    !t.active &&
+    t.url &&
+    !t.url.startsWith("chrome://") &&
+    !t.url.startsWith("chrome-extension://") &&
+    !t.url.startsWith("edge://") &&
+    (now - (t.lastAccessed || 0)) > thresholdMs
+  );
+
+  console.log("[Tabify] Idle tabs found:", idleTabs.length);
+
+  if (idleTabs.length > 0) {
+    idleTabs.sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
+
+    let title, message, buttons;
+
+    if (idleTabs.length === 1) {
+      const lruTab = idleTabs[0];
+      title = "Tabify Cleanup";
+      message = `Your tab "${lruTab.title.substring(0, 30)}..." hasn't been used in over ${inactiveThreshold} min. Close it?`;
+      buttons = [
+        { title: "Close Tab" },
+        { title: "Review All Inactive" }
+      ];
+      await chrome.storage.local.set({ lastLruTabId: lruTab.id });
+    } else {
+      title = "Tabify Cleanup";
+      message = `You have ${idleTabs.length} tabs inactive for over ${inactiveThreshold} min.`;
+      buttons = [
+        { title: "Review All Inactive" }
+      ];
+      await chrome.storage.local.remove("lastLruTabId");
+    }
+
+    chrome.notifications.create("lruNotification", {
+      type: "basic",
+      iconUrl: "new-logo.png",
+      title: title,
+      message: message,
+      buttons: buttons,
+      priority: 2
+    }, (id) => {
+      if (chrome.runtime.lastError) {
+        console.error("[Tabify] Notification error:", chrome.runtime.lastError);
+      } else {
+        console.log("[Tabify] Notification created:", id);
+      }
+    });
+  }
+}
+
+// ─── Listen for messages from popup ───
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "testInactivity") {
+    checkInactiveTabs().then(() => sendResponse({ success: true }));
+    return true;
+  }
+});
+
+// ─── Notification Button Clicks ───
 chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
   if (notificationId === "lruNotification") {
-    if (buttonIndex === 0) {
-      const { lastLruTabId } = await chrome.storage.local.get("lastLruTabId");
-      if (lastLruTabId) {
+    const { lastLruTabId } = await chrome.storage.local.get("lastLruTabId");
+
+    if (lastLruTabId) {
+      // Single tab case
+      if (buttonIndex === 0) {
         chrome.tabs.remove(lastLruTabId);
+        await chrome.storage.local.remove("lastLruTabId");
+      } else if (buttonIndex === 1) {
+        chrome.tabs.create({ url: chrome.runtime.getURL("popup.html#cleanup") });
       }
-    } else if (buttonIndex === 1) {
-      chrome.tabs.create({ url: chrome.runtime.getURL("popup.html#cleanup") });
+    } else {
+      // Multiple tabs case
+      if (buttonIndex === 0) {
+        chrome.tabs.create({ url: chrome.runtime.getURL("popup.html#cleanup") });
+      }
     }
+
+    chrome.notifications.clear(notificationId);
   }
 });
 
@@ -80,7 +165,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
 async function saveCorrection(tab, manualCategory) {
   if (!tab.url || tab.url.startsWith("chrome://")) return;
-  
+
   const domain = extractDomainBg(tab.url);
   const title = tab.title || "";
   const correction = {
@@ -91,18 +176,16 @@ async function saveCorrection(tab, manualCategory) {
   };
 
   const { userCorrections = [] } = await chrome.storage.local.get("userCorrections");
-  
-  // Avoid duplicate corrections for the same domain/title/category within a short time
-  const isDuplicate = userCorrections.some(c => 
-    c.domain === domain && 
-    c.title === title && 
-    c.category === manualCategory && 
+
+  const isDuplicate = userCorrections.some(c =>
+    c.domain === domain &&
+    c.title === title &&
+    c.category === manualCategory &&
     (Date.now() - c.timestamp) < 60000
   );
 
   if (!isDuplicate) {
     userCorrections.push(correction);
-    // Keep only the last 200 corrections to manage storage
     if (userCorrections.length > 200) userCorrections.shift();
     await chrome.storage.local.set({ userCorrections });
     console.log(`[Tabify] Saved correction: ${domain} -> ${manualCategory}`);
@@ -111,7 +194,6 @@ async function saveCorrection(tab, manualCategory) {
 
 // ─── Dynamic Grouping Listener ───
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  // Trigger on status complete OR title change OR URL change (important for SPAs like YouTube)
   if (changeInfo.status !== "complete" && !changeInfo.title && !changeInfo.url) return;
   if (!tab.url) return;
   if (/^(chrome|edge|chrome-extension):/.test(tab.url)) return;
@@ -121,17 +203,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   const { modelData } = await chrome.storage.local.get("modelData");
 
-  // Add a small delay for SPAs to ensure the title/URL has fully updated in the DOM
-  if (changeInfo.title || changeInfo.url || changeInfo.status === "complete") {
-    setTimeout(async () => {
-      try {
-        const updatedTab = await chrome.tabs.get(tabId);
-        await groupSingleTab(updatedTab, modelData);
-      } catch (e) {
-        console.error("Error updating tab group:", e);
-      }
-    }, 1000); // 1 second delay to be safe for YouTube/SPAs
-  }
+  setTimeout(async () => {
+    try {
+      const updatedTab = await chrome.tabs.get(tabId);
+      await groupSingleTab(updatedTab, modelData);
+    } catch (e) {
+      console.error("[Tabify] Error updating tab group:", e);
+    }
+  }, 1000);
 });
 
 async function groupSingleTab(tab, modelData, retries = 3, delay = 500) {
@@ -144,7 +223,6 @@ async function groupSingleTab(tab, modelData, retries = 3, delay = 500) {
       try {
         await chrome.tabs.group({ tabIds: [tab.id], groupId: match.id });
       } catch (e) {
-        // If the group was just closed, create a new one
         const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
         await chrome.tabGroups.update(groupId, {
           title: category,
@@ -159,19 +237,18 @@ async function groupSingleTab(tab, modelData, retries = 3, delay = 500) {
       });
     }
   } catch (e) {
-    // Retry if Chrome is temporarily blocking tab edits (user dragging, etc.)
     if (e.message && e.message.includes("Tabs cannot be edited") && retries > 0) {
-      console.warn(`[Grouping] Retrying in ${delay}ms (${retries} retries left)`);
+      console.warn(`[Tabify] Retrying grouping in ${delay}ms (${retries} retries left)`);
       setTimeout(() => {
         groupSingleTab(tab, modelData, retries - 1, delay * 1.5);
       }, delay);
     } else {
-      console.error("[Grouping] Failed to group tab:", e);
+      console.error("[Tabify] Failed to group tab:", e);
     }
   }
 }
 
-// ─── Classification Logic (Unified) ───
+// ─── Classification Logic ───
 function extractDomainBg(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); }
   catch { return ""; }
@@ -183,7 +260,6 @@ function extractRelevantTextFromUrlBg(url, domain, title) {
   if (domain === "youtube.com") {
     const match = url.match(/[?&]search_query=([^&]+)/);
     if (match) extractedText = decodeURIComponent(match[1].replace(/\+/g, " "));
-    // Clean and append title
     const cleanTitle = title
       ? title.replace(/ - YouTube$/, "").replace(/ \(\d+\)$/, "").trim()
       : "";
@@ -197,7 +273,6 @@ function extractRelevantTextFromUrlBg(url, domain, title) {
       const postMatch = url.match(/\/r\/([^/]+)\/comments\/[^/]+\/([^/]+)/);
       if (postMatch) extractedText = `${postMatch[1]} ${postMatch[2].replace(/_/g, " ")}`;
     }
-    // Always append title for Reddit - strip the " : subreddit" suffix
     const cleanTitle = title
       ? title.replace(/ : [^:]+$/, "").replace(/ - Reddit$/, "").trim()
       : "";
@@ -213,7 +288,6 @@ function extractRelevantTextFromUrlBg(url, domain, title) {
       const questionMatch = url.match(/quora\.com\/([^/?#]+)/);
       if (questionMatch) extractedText = questionMatch[1].replace(/-/g, " ");
     }
-    // Always append title for Quora - strip " - Quora" suffix
     const cleanTitle = title
       ? title.replace(/ - Quora$/, "").trim()
       : "";
@@ -224,7 +298,6 @@ function extractRelevantTextFromUrlBg(url, domain, title) {
   } else if (domain === "stackoverflow.com") {
     const questionMatch = url.match(/\/questions\/\d+\/([^/?#]+)/);
     if (questionMatch) extractedText = questionMatch[1].replace(/-/g, " ");
-    // Append title, strip " - Stack Overflow"
     const cleanTitle = title
       ? title.replace(/ - Stack Overflow$/, "").trim()
       : "";
@@ -304,12 +377,12 @@ function predictBg(vector, modelData) {
 function classifyYouTubeBg(title) {
   const t = title.toLowerCase();
   const studyKW = ["lecture","tutorial","course","class","lesson","physics","chemistry","biology","mathematics","maths","calculus","algebra","integration","differentiation","thermodynamics","electrostatics","mechanics","optics","jee","neet","gate","upsc","cbse","ncert","physics wallah","khan academy","crashcourse","3blue1brown","mit opencourseware","nptel","vedantu","unacademy","abdul bari","cs50","andrew ng","data structures","algorithms","dsa","operating system","computer networks","dbms","discrete math","study","exam","syllabus","notes","solution","past paper","previous year","mock test","neural network explained","machine learning explained","what is","how does","how to learn","homework","assignment","textbook","vit"];
-  const gameKW = ["gameplay","walkthrough","playthrough","let's play","lets play","gaming","minecraft","fortnite","valorant","csgo","gta","roblox","pubg","freefire","cod","warzone","highlights","clutch","speedrun","patch notes","season update"];
-  const codeKW = ["how to code","learn to code","programming","coding","code","game development","game dev","unity","unreal","godot","pygame","project","build"]
-  const entKW = ["trailer","mv","music video","official video","lyric video","song","album","playlist","podcast","interview","reaction","roast","challenge","prank","vlog","comedy","meme","shorts","trending","viral","movie","series","episode","season","web series","anime","asmr","mukbang","unboxing","mrbeast","pewdiepie","carryminati","bb ki vines","bollywood","hollywood","netflix","prime"];
+  const gameKW  = ["gameplay","walkthrough","playthrough","let's play","lets play","gaming","minecraft","fortnite","valorant","csgo","gta","roblox","pubg","freefire","cod","warzone","highlights","clutch","speedrun","patch notes","season update"];
+  const codeKW  = ["how to code","learn to code","programming","coding","code","game development","game dev","unity","unreal","godot","pygame","project","build"];
+  const entKW   = ["trailer","mv","music video","official video","lyric video","song","album","playlist","podcast","interview","reaction","roast","challenge","prank","vlog","comedy","meme","shorts","trending","viral","movie","series","episode","season","web series","anime","asmr","mukbang","unboxing","mrbeast","pewdiepie","carryminati","bb ki vines","bollywood","hollywood","netflix","prime"];
 
-  let s = 0, g = 0, e = 0,c=0;
-  codeKW.forEach(k => { if (t.includes(k)) c += 2; });
+  let s = 0, g = 0, e = 0, c = 0;
+  codeKW.forEach(k  => { if (t.includes(k)) c += 2; });
   studyKW.forEach(k => { if (t.includes(k)) s += 2; });
   gameKW.forEach(k  => { if (t.includes(k)) g++;    });
   entKW.forEach(k   => { if (t.includes(k)) e++;    });
@@ -354,15 +427,13 @@ async function classifyTabBg(tab, modelData) {
   if (!tab.url || /^(chrome|edge|chrome-extension):/.test(tab.url)) return "Other";
   const domain = extractDomainBg(tab.url);
   const title  = tab.title || "";
-  
-  // 1. Check User Corrections (Personalized Layer - 2x Weight equivalent)
+
   const { userCorrections = [] } = await chrome.storage.local.get("userCorrections");
   const exactMatch = userCorrections.findLast(c => c.domain === domain && c.title === title);
   if (exactMatch) return exactMatch.category;
 
   const domainMatch = userCorrections.filter(c => c.domain === domain);
   if (domainMatch.length >= 3) {
-    // If user consistently puts this domain in a specific category, use it
     const counts = {};
     domainMatch.forEach(c => counts[c.category] = (counts[c.category] || 0) + 1);
     const topCategory = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
@@ -381,8 +452,8 @@ async function classifyTabBg(tab, modelData) {
     const r = classifyYouTubeBg(title);
     if (r !== null) return r;
   }
-  if (/\.(edu|ac|ac\.[a-z]{2})$/.test(domain))                              return "Study";
-  if (/\.gov(\.[a-z]{2})?$/.test(domain) || domain.endsWith(".nic.in"))     return "Other";
+  if (/\.(edu|ac|ac\.[a-z]{2})$/.test(domain))                               return "Study";
+  if (/\.gov(\.[a-z]{2})?$/.test(domain) || domain.endsWith(".nic.in"))      return "Other";
   if (domain.endsWith(".bank") || /\bbank\b|\bfinance\b|\binsurance\b/.test(domain)) return "Financial";
 
   if (modelData) {
@@ -391,10 +462,6 @@ async function classifyTabBg(tab, modelData) {
     const index  = predictBg(vector, modelData);
     if (index !== -1) {
       const category = modelData.classes[index];
-      if (category === "Shopping") {
-        const shopKW = ["buy","shop","cart","order","price","sale","discount","offer","deal","checkout","purchase","delivery","store","myntra","flipkart","amazon","nykaa","ajio","meesho","snapdeal","croma","ikea","tatacliq"];
-        if (!shopKW.some(k => text.includes(k) || domain.includes(k))) return "Other";
-      }
       return category;
     }
   }
